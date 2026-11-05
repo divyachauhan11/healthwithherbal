@@ -1,0 +1,3 @@
+const mongoose = require("mongoose");
+const schema = new mongoose.Schema({ zoneId: { type: mongoose.Schema.Types.ObjectId, ref: "ShippingZone", required: true, index: true }, name: { type: String, enum: ["standard", "express"], required: true }, calcType: { type: String, enum: ["flat", "weight", "order_value"], required: true }, rate: { type: Number, min: 0, required: true }, currency: { type: String, default: "INR" }, minWeightG: Number, maxWeightG: Number, freeAboveAmount: Number, estDaysMin: Number, estDaysMax: Number, isActive: { type: Boolean, default: true } }, { timestamps: true, versionKey: false });
+module.exports = mongoose.model("ShippingRate", schema, "shipping_rates");

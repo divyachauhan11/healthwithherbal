@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48" width="160" height="48">
+  <circle cx="22" cy="24" r="14" stroke="#2e7d32" stroke-width="2" fill="none" />
+  <path d="M15 24C15 20 22 14 22 14C22 14 29 20 29 24C29 28 26 31 22 31C18 31 15 28 15 24Z" fill="#2e7d32" />
+  <text x="44" y="31" font-family="'DM Serif Display', Georgia, serif" font-size="23" font-weight="bold" fill="#1b5e20" letter-spacing="0.5">Hamdard</text>
+</svg>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 170 48" width="170" height="48">
+  <path d="M14 36L26 12L38 36Z" fill="#00796b" opacity="0.25" />
+  <path d="M26 10L39 36H13L26 10Z" stroke="#00796b" stroke-width="2.8" stroke-linejoin="round" fill="none" />
+  <path d="M26 17L34 36H18L26 17Z" fill="#ff7043" />
+  <text x="46" y="27" font-family="'DM Sans', sans-serif" font-size="20" font-weight="800" fill="#004d40">Himalaya</text>
+  <text x="48" y="38" font-family="'DM Sans', sans-serif" font-size="8" font-weight="700" fill="#ff7043" letter-spacing="2">SINCE 1930</text>
+</svg>

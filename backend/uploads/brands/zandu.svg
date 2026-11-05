@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 48" width="150" height="48">
+  <polygon points="12,34 22,12 32,34" fill="#0288d1" opacity="0.2" />
+  <path d="M14 32L30 16H16V12H34V16L18 32H34V36H14V32Z" fill="#0277bd" />
+  <text x="40" y="32" font-family="'DM Sans', sans-serif" font-size="23" font-weight="900" fill="#01579b" letter-spacing="1">ZANDU</text>
+</svg>

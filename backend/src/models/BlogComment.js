@@ -1,0 +1,3 @@
+const mongoose = require("mongoose");
+const schema = new mongoose.Schema({ postId: { type: mongoose.Schema.Types.ObjectId, ref: "BlogPost", required: true, index: true }, userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null }, parentId: { type: mongoose.Schema.Types.ObjectId, ref: "BlogComment", default: null }, authorName: String, authorEmail: String, content: { type: String, required: true }, status: { type: String, enum: ["pending", "approved", "spam", "rejected"], default: "pending" } }, { timestamps: true, versionKey: false });
+module.exports = mongoose.model("BlogComment", schema, "blog_comments");

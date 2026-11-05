@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 48" width="180" height="48">
+  <circle cx="22" cy="24" r="15" fill="#d32f2f" opacity="0.12" />
+  <circle cx="22" cy="24" r="10" stroke="#d32f2f" stroke-width="2.5" fill="none" />
+  <circle cx="22" cy="24" r="4" fill="#d32f2f" />
+  <text x="44" y="31" font-family="'DM Serif Display', Georgia, serif" font-size="23" font-weight="bold" fill="#b71c1c" letter-spacing="0.2">Baidyanath</text>
+</svg>

@@ -1,0 +1,27 @@
+{
+  "name": "healthwithherbal-api",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "db:init": "node scripts/init-database.js",
+    "seed": "node scripts/seed-products.js",
+    "db:setup": "npm run db:init && npm run seed",
+    "test:auth": "node scripts/test-auth-brevo.js",
+    "test:cloudinary": "node scripts/test-cloudinary.js",
+    "migrate:cloudinary": "node scripts/migrate-to-cloudinary.js"
+  },
+  "dependencies": {
+    "cloudinary": "^2.11.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "mongoose": "^8.9.5",
+    "multer": "^2.5.0",
+    "zod": "^3.24.1"
+  }
+}

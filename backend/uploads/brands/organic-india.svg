@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 48" width="180" height="48">
+  <circle cx="20" cy="24" r="14" stroke="#f57f17" stroke-width="2" stroke-dasharray="3 2" fill="none" />
+  <circle cx="20" cy="24" r="8" fill="#388e3c" />
+  <text x="40" y="22" font-family="'DM Sans', sans-serif" font-size="13" font-weight="bold" fill="#2e7d32" letter-spacing="0.5">ORGANIC</text>
+  <text x="40" y="36" font-family="'DM Sans', sans-serif" font-size="15" font-weight="900" fill="#f57f17" letter-spacing="1.5">INDIA</text>
+</svg>
