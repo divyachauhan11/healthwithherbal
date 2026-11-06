@@ -1,0 +1,4 @@
+/* Shared global styles / design tokens */
+:root {
+  --font-primary: inherit;
+}

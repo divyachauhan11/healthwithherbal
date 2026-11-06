@@ -1,0 +1,13 @@
+export { BlogPage } from "../../app/(pages)/blog/blog-page";
+export { HomePage } from "../../app/(pages)/home/home-page";
+export { ShopPage } from "../../app/(pages)/shop/shop-page";
+export { ProductPage } from "../../app/(pages)/products/product-page";
+export { WishlistPage } from "../../app/(pages)/wishlist/wishlist-page";
+export { InfoPage } from "../../app/(pages)/info/info-page";
+export { ContentPage } from "../../app/(pages)/content/content-page";
+export { CheckoutPage } from "../../app/(pages)/checkout/checkout-page";
+export { NewLaunchesSection } from "./sections/new-launches";
+export { BrandsSliderSection } from "./sections/brand-slider";
+export { WhyHealthWithHerbal } from "./sections/why-section";
+export { AccountPage } from "../../app/(pages)/account/account-page";
+export { OrderPlacedPage } from "../../app/(pages)/order-confirmation/order-placed-page";
