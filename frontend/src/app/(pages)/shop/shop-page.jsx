@@ -13,6 +13,7 @@ export function ShopPage({
   openProduct,
   view,
   initialTerm,
+  openCatalog,
   products: productsProp = [],
   categories: categoriesProp = [],
   brands: brandsProp = [],
@@ -290,7 +291,7 @@ export function ShopPage({
             <input
               value={term}
               onChange={(event) => setTerm(event.target.value)}
-              placeholder="Try “Himalaya”"
+              placeholder="Search products or brands"
             />
           </label>
 
@@ -412,6 +413,7 @@ export function ShopPage({
                 onWish={() => onWish(product.id || product._id)}
                 onAdd={() => onAdd(product.id || product._id)}
                 onOpen={() => openProduct(product.id || product._id)}
+                onSimilar={() => openCatalog?.(product.category || "All Products")}
               />
             ))}
             {!sorted.length && (

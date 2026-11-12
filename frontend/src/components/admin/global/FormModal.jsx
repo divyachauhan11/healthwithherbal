@@ -157,6 +157,8 @@ function ArticleMarkdown({ content = "" }) {
 function getEntitySchema(entity, { initial, catalog, brands = [], categories = [] }) {
   const allBrands = catalog?.brands || brands || [];
   const allCategories = catalog?.categories || categories || [];
+  const productCategories = allCategories.filter((category) => !category.isParent);
+  const parentCategories = allCategories.filter((category) => category.isParent);
   const isEditing = Boolean(initial?._id);
 
   switch (entity?.toLowerCase()) {
@@ -196,7 +198,7 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             type: "select",
             required: true,
             placeholder: "Choose category",
-            options: allCategories.map((c) => ({ value: c.name, label: c.name })),
+            options: productCategories.map((c) => ({ value: c.name, label: c.name })),
           },
           {
             name: "stockQty",
@@ -358,9 +360,6 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
       };
 
     case "category":
-      const eligibleParents = allCategories.filter(
-        (c) => !initial?._id || String(c._id) !== String(initial._id)
-      );
       return {
         title: isEditing ? "Edit Category" : "Add New Category",
         subtitle: isEditing
@@ -385,6 +384,13 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             placeholder: "e.g. immunity-vitality",
           },
           {
+            name: "parentId",
+            label: "Parent category (optional)",
+            type: "select",
+            placeholder: "No parent category",
+            options: parentCategories.map((category) => ({ value: category._id, label: category.name })),
+          },
+          {
             name: "type",
             label: "Category Classification / Placement",
             type: "radio-cards",
@@ -406,17 +412,6 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
               },
             ],
           },
-          ...(isEditing && eligibleParents.length > 0
-            ? [
-                {
-                  name: "parentId",
-                  label: "Parent category (optional)",
-                  type: "select",
-                  placeholder: "None (Top-level category)",
-                  options: eligibleParents.map((p) => ({ value: p._id, label: p.name })),
-                },
-              ]
-            : []),
           {
             name: "description",
             label: "Description (optional)",
@@ -443,6 +438,38 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
         ],
       };
 
+    case "parent-category":
+      return {
+        title: isEditing ? "Edit Parent Category" : "Add New Parent Category",
+        subtitle: isEditing
+          ? "Update this top-level category used to group related categories."
+          : "Create a top-level category that can be selected when creating regular categories.",
+        fields: [
+          {
+            name: "name",
+            label: "Parent category name",
+            type: "text",
+            required: true,
+            placeholder: "Enter a parent category name",
+          },
+          {
+            name: "slug",
+            label: "URL Slug",
+            type: "slug",
+            from: "name",
+            required: true,
+            help: "Used in web URL: /category/{slug}",
+            placeholder: "parent-category-slug",
+          },
+          {
+            name: "isActive",
+            label: "Active",
+            type: "checkbox",
+            defaultValue: true,
+          },
+        ],
+      };
+
     case "brand":
       return {
         title: isEditing ? "Edit Brand" : "Add Brand",
@@ -455,7 +482,7 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             label: "Brand name",
             type: "text",
             required: true,
-            placeholder: "e.g. Himalaya Herbals, Dabur, Organic India",
+            placeholder: "Enter a brand name",
           },
           {
             name: "slug",
@@ -463,7 +490,7 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             type: "slug",
             from: "name",
             required: true,
-            placeholder: "e.g. himalaya-herbals",
+            placeholder: "brand-slug",
           },
           {
             name: "description",
@@ -487,6 +514,98 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             type: "checkbox",
             span: "wide",
             defaultValue: true,
+          },
+        ],
+      };
+
+    case "address":
+      return {
+        title: isEditing ? "Edit Address" : "Add New Address",
+        subtitle: isEditing
+          ? "Update your delivery recipient details, street address, and preferences."
+          : "Add a shipping address for smooth delivery and one-click checkout.",
+        fields: [
+          {
+            name: "fullName",
+            label: "Full Name",
+            type: "text",
+            required: true,
+            placeholder: "Recipient Full Name (e.g. Aarav Sharma)",
+          },
+          {
+            name: "phone",
+            label: "Phone Number",
+            type: "tel",
+            required: true,
+            placeholder: "10-digit mobile number",
+          },
+          {
+            name: "tag",
+            label: "Address Type / Tag",
+            type: "select",
+            defaultValue: "Home",
+            options: [
+              { value: "Home", label: "Home" },
+              { value: "Work", label: "Work / Office" },
+              { value: "Other", label: "Other" },
+            ],
+          },
+          {
+            name: "country",
+            label: "Country",
+            type: "select",
+            required: true,
+            defaultValue: "India",
+            options: [
+              { value: "India", label: "India" },
+              { value: "United States", label: "United States" },
+              { value: "United Kingdom", label: "United Kingdom" },
+              { value: "Canada", label: "Canada" },
+              { value: "Australia", label: "Australia" },
+              { value: "United Arab Emirates", label: "United Arab Emirates" },
+            ],
+          },
+          {
+            name: "line1",
+            label: "Street Address Line 1",
+            type: "text",
+            span: "wide",
+            required: true,
+            placeholder: "House / Flat No., Apartment, Building, Street",
+          },
+          {
+            name: "line2",
+            label: "Address Line 2 (Optional)",
+            type: "text",
+            span: "wide",
+            placeholder: "Area, Landmark, Sector, Colony",
+          },
+          {
+            name: "city",
+            label: "City",
+            type: "text",
+            required: true,
+            placeholder: "City / District",
+          },
+          {
+            name: "state",
+            label: "State / Province",
+            type: "text",
+            placeholder: "State / Province",
+          },
+          {
+            name: "postalCode",
+            label: "Postal Code (PIN)",
+            type: "text",
+            required: true,
+            placeholder: "e.g. 110001",
+          },
+          {
+            name: "isDefault",
+            label: "Make this my default shipping address",
+            type: "checkbox",
+            span: "wide",
+            defaultValue: false,
           },
         ],
       };
@@ -706,6 +825,7 @@ export function FormModal({
   busy = false,
   submitLabel,
   maxWidth = "820px",
+  className = "",
   children,
 }) {
   // Compute entity schema
@@ -849,6 +969,26 @@ export function FormModal({
     if (ent === "category") {
       if (!payload.parentId) delete payload.parentId;
       if (!payload.type) payload.type = initial?.type || "form";
+      payload.isParent = false;
+    }
+
+    if (ent === "parent-category") {
+      payload.isParent = true;
+      payload.parentId = null;
+      payload.type = "form";
+    }
+
+    if (ent === "address") {
+      if (payload.fullName) payload.fullName = String(payload.fullName).trim();
+      if (payload.phone) payload.phone = String(payload.phone).trim();
+      if (payload.line1) payload.line1 = String(payload.line1).trim();
+      if (payload.line2) payload.line2 = String(payload.line2).trim();
+      if (payload.city) payload.city = String(payload.city).trim();
+      if (payload.state) payload.state = String(payload.state).trim();
+      if (payload.postalCode) payload.postalCode = String(payload.postalCode).trim();
+      if (payload.country) payload.country = String(payload.country).trim();
+      if (payload.tag) payload.tag = String(payload.tag).trim();
+      if (payload.isDefault !== undefined) payload.isDefault = Boolean(payload.isDefault);
     }
 
     onSave(payload);
@@ -862,6 +1002,7 @@ export function FormModal({
       title={activeTitle}
       subtitle={activeSubtitle}
       maxWidth={maxWidth}
+      className={className}
       onClose={onClose}
       onSubmit={handleSubmit}
       busy={busy}
@@ -1009,6 +1150,7 @@ export function FormModal({
                 {labelEl}
                 <select
                   required={field.required}
+                  autoComplete={field.autoComplete}
                   value={form[field.name] || ""}
                   onChange={(e) => updateField(field.name, e.target.value)}
                 >
@@ -1095,6 +1237,7 @@ export function FormModal({
               {labelEl}
               <input
                 type={field.type || "text"}
+                autoComplete={field.autoComplete}
                 min={field.min}
                 max={field.max}
                 minLength={field.minLength}

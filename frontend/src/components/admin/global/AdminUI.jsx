@@ -25,7 +25,7 @@ export function Login({ onLogin, busy, error }) {
       <form className="admin-login" onSubmit={onLogin}>
         <div className="admin-login-logo-card">
           <img
-            src="/admin-login-logo.png"
+            src="/admin-login-logo-clean.png"
             alt="Health With Herbal"
             className="admin-login-logo-img"
           />

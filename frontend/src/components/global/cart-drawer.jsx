@@ -17,6 +17,7 @@ import {
   Loader2,
 } from "lucide-react";
 import {
+  listCoupons,
   validateCoupon,
   estimateShipping,
   syncCartWithBackend,
@@ -95,6 +96,21 @@ export function CartDrawer({
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [discountMsg, setDiscountMsg] = useState({ type: "", text: "" });
   const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [backendCoupons, setBackendCoupons] = useState(coupons);
+
+  useEffect(() => {
+    let active = true;
+    listCoupons()
+      .then((result) => {
+        if (active && Array.isArray(result)) setBackendCoupons(result);
+      })
+      .catch((err) => {
+        console.error("Failed to load available coupons:", err);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   // Shipping calculator (calculated live via backend API)
   const [shippingCountry, setShippingCountry] = useState("India");
@@ -111,46 +127,14 @@ export function CartDrawer({
 
   // Real Database Coupons mapped from MongoDB backend
   const availableCoupons = useMemo(() => {
-    if (coupons && coupons.length > 0) {
-      return coupons.map((c) => ({
-        code: c.code,
-        discountType: c.discountType || "percent",
-        discountValue: Number(c.discountValue) || 10,
-        minOrderAmount: Number(c.minOrderAmount) || 0,
-        description: c.description || `Special Ayurvedic offer`,
-      }));
-    }
-    return [
-      {
-        code: "HERBAL15",
-        discountType: "percent",
-        discountValue: 15,
-        minOrderAmount: 40,
-        description: "15% discount on all prepaid orders",
-      },
-      {
-        code: "WELCOME10",
-        discountType: "percent",
-        discountValue: 10,
-        minOrderAmount: 20,
-        description: "Flat 10% off for new wellness seekers",
-      },
-      {
-        code: "FREESHIP75",
-        discountType: "free_shipping",
-        discountValue: 8,
-        minOrderAmount: 75,
-        description: "Free standard shipping on orders over ₹75",
-      },
-      {
-        code: "AYUR20",
-        discountType: "fixed",
-        discountValue: 20,
-        minOrderAmount: 100,
-        description: "Flat ₹20 off on heritage Rasayana and classical oils",
-      },
-    ];
-  }, [coupons]);
+    return (backendCoupons || []).map((c) => ({
+      code: c.code,
+      discountType: c.discountType || "percent",
+      discountValue: Number(c.discountValue) || 0,
+      minOrderAmount: Number(c.minOrderAmount) || 0,
+      description: c.description || "",
+    }));
+  }, [backendCoupons]);
 
   // Group line items using live database products
   const lineItems = useMemo(() => {
@@ -402,33 +386,10 @@ export function CartDrawer({
         }!`,
       });
     } catch (err) {
-      // Fallback check against availableCoupons if offline
-      const localMatched = availableCoupons.find(
-        (c) => c.code.toUpperCase() === code,
-      );
-      if (localMatched) {
-        if (
-          localMatched.minOrderAmount &&
-          rawSellingTotal < localMatched.minOrderAmount
-        ) {
-          setDiscountMsg({
-            type: "error",
-            text: `This coupon requires a minimum cart total of Rs. ${localMatched.minOrderAmount}`,
-          });
-        } else {
-          setAppliedCoupon(localMatched);
-          setDiscountInput(localMatched.code);
-          setDiscountMsg({
-            type: "success",
-            text: `Coupon “${localMatched.code}” applied!`,
-          });
-        }
-      } else {
-        setDiscountMsg({
-          type: "error",
-          text: err.message || `“${code}” is not a valid coupon code`,
-        });
-      }
+      setDiscountMsg({
+        type: "error",
+        text: err.message || `“${code}” is not a valid coupon code`,
+      });
     } finally {
       setValidatingCoupon(false);
     }
@@ -1006,38 +967,39 @@ export function CartDrawer({
                   </div>
                 )}
 
-                {/* Available Offers Chips from MongoDB Database */}
-                <div className="cart-available-offers-section">
-                  <span className="cart-offers-heading">
-                    Available Offers ({availableCoupons.length}):
-                  </span>
-                  <div className="cart-offers-chips-list">
-                    {availableCoupons.map((c) => {
-                      const isCurr = appliedCoupon?.code === c.code;
-                      return (
-                        <button
-                          key={c.code}
-                          type="button"
-                          className={`cart-offer-chip ${isCurr ? "active" : ""}`}
-                          onClick={() => handleApplyCoupon(c.code)}
-                          title={c.description}
-                        >
-                          <Tag size={12} />
-                          <strong>{c.code}</strong>
-                          <small>
-                            (
-                            {c.discountType === "percent"
-                              ? `${c.discountValue}% OFF`
-                              : c.discountType === "free_shipping"
-                                ? "FREE SHIP"
-                                : `Rs. ${c.discountValue} OFF`}
-                            )
-                          </small>
-                        </button>
-                      );
-                    })}
+                {availableCoupons.length > 0 && (
+                  <div className="cart-available-offers-section">
+                    <span className="cart-offers-heading">
+                      Available Offers ({availableCoupons.length}):
+                    </span>
+                    <div className="cart-offers-chips-list">
+                      {availableCoupons.map((c) => {
+                        const isCurr = appliedCoupon?.code === c.code;
+                        return (
+                          <button
+                            key={c.code}
+                            type="button"
+                            className={`cart-offer-chip ${isCurr ? "active" : ""}`}
+                            onClick={() => handleApplyCoupon(c.code)}
+                            title={c.description}
+                          >
+                            <Tag size={12} />
+                            <strong>{c.code}</strong>
+                            <small>
+                              (
+                              {c.discountType === "percent"
+                                ? `${c.discountValue}% OFF`
+                                : c.discountType === "free_shipping"
+                                  ? "FREE SHIP"
+                                  : `Rs. ${c.discountValue} OFF`}
+                              )
+                            </small>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           </div>

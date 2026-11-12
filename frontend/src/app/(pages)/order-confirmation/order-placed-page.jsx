@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import {
   CheckCircle2,
   Package,
+  PackageCheck,
   Calendar,
   MapPin,
   CreditCard,
@@ -17,6 +18,7 @@ import {
   Sparkles,
   XCircle,
   Star,
+  Loader2,
 } from "lucide-react";
 import { fetchOrderDetails, getOrderLiveStreamUrl } from "../../../lib/api";
 import { ProductReviewModal } from "../../../components/global";
@@ -35,8 +37,8 @@ const STAGES = [
       status === "placed"
         ? "Within 24 hours"
         : status === "processing"
-        ? "Packing & quality check"
-        : "Completed",
+          ? "Packing & quality check"
+          : "Completed",
     icon: Package,
   },
   {
@@ -46,15 +48,17 @@ const STAGES = [
       status === "shipped"
         ? "On the way to you"
         : status === "delivered"
-        ? "Arrived"
-        : "2-4 business days",
+          ? "Arrived"
+          : "2-4 business days",
     icon: Truck,
   },
   {
     key: "delivered",
     name: "Delivered",
     timeText: (status) =>
-      status === "delivered" ? "Delivered to your doorstep" : "To your doorstep",
+      status === "delivered"
+        ? "Delivered to your doorstep"
+        : "To your doorstep",
     icon: CheckCircle2,
   },
 ];
@@ -67,18 +71,24 @@ const getStageState = (stageIndex, status) => {
     return { isCompleted: true, isCurrent: false, isPending: false };
   }
   if (status === "shipped") {
-    if (stageIndex < 2) return { isCompleted: true, isCurrent: false, isPending: false };
-    if (stageIndex === 2) return { isCompleted: false, isCurrent: true, isPending: false };
+    if (stageIndex < 2)
+      return { isCompleted: true, isCurrent: false, isPending: false };
+    if (stageIndex === 2)
+      return { isCompleted: false, isCurrent: true, isPending: false };
     return { isCompleted: false, isCurrent: false, isPending: true };
   }
   if (status === "processing") {
-    if (stageIndex === 0) return { isCompleted: true, isCurrent: false, isPending: false };
-    if (stageIndex === 1) return { isCompleted: false, isCurrent: true, isPending: false };
+    if (stageIndex === 0)
+      return { isCompleted: true, isCurrent: false, isPending: false };
+    if (stageIndex === 1)
+      return { isCompleted: false, isCurrent: true, isPending: false };
     return { isCompleted: false, isCurrent: false, isPending: true };
   }
   // status === "placed" (Initial stage: Step 0 confirmed, Step 1 in-progress/packing)
-  if (stageIndex === 0) return { isCompleted: true, isCurrent: false, isPending: false };
-  if (stageIndex === 1) return { isCompleted: false, isCurrent: true, isPending: false };
+  if (stageIndex === 0)
+    return { isCompleted: true, isCurrent: false, isPending: false };
+  if (stageIndex === 1)
+    return { isCompleted: false, isCurrent: true, isPending: false };
   return { isCompleted: false, isCurrent: false, isPending: true };
 };
 
@@ -89,18 +99,50 @@ const isDividerActive = (dividerIndex, status) => {
   return dividerIndex === 0;
 };
 
+const orderProductImage = (item) =>
+  item?.image || item?.productImage || item?.product?.image || item?.product?.images?.[0] || "";
+
 export function OrderPlacedPage({
   order,
   navigate,
   currentUser,
+  detailMode = false,
 }) {
   const [copied, setCopied] = useState(false);
   const [cachedOrder, setCachedOrder] = useState(null);
   const [liveOrderData, setLiveOrderData] = useState(null);
   const [reviewModalItem, setReviewModalItem] = useState(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [returnExchangeOpen, setReturnExchangeOpen] = useState(false);
+  const [returnRequestType, setReturnRequestType] = useState("return");
+  const [returnRequestItem, setReturnRequestItem] = useState("");
+  const [returnRequestReason, setReturnRequestReason] = useState("");
 
   useEffect(() => {
-    if (!order && typeof window !== "undefined") {
+    if (!detailMode || order || typeof window === "undefined") return;
+    const identifier = decodeURIComponent(
+      window.location.pathname.split("/").filter(Boolean).at(-1) || "",
+    );
+    if (!identifier) return;
+    let active = true;
+    setLoadingDetail(true);
+    fetchOrderDetails(identifier)
+      .then((fresh) => {
+        if (active) setCachedOrder(fresh);
+      })
+      .catch((error) => {
+        if (active) console.error("Could not load order details:", error);
+      })
+      .finally(() => {
+        if (active) setLoadingDetail(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [detailMode, order]);
+
+  useEffect(() => {
+    if (!detailMode && !order && typeof window !== "undefined") {
       try {
         const saved = localStorage.getItem("hwh_last_order");
         if (saved) {
@@ -108,14 +150,13 @@ export function OrderPlacedPage({
         }
       } catch (e) {}
     }
-  }, [order]);
+  }, [order, detailMode]);
 
   // Active real order from checkout or cache
   const rawOrder = order || cachedOrder || null;
 
-  const displayOrder = liveOrderData && rawOrder
-    ? { ...rawOrder, ...liveOrderData }
-    : rawOrder;
+  const displayOrder =
+    liveOrderData && rawOrder ? { ...rawOrder, ...liveOrderData } : rawOrder;
 
   const currentStatus = (displayOrder?.status || "placed").toLowerCase();
 
@@ -228,19 +269,68 @@ export function OrderPlacedPage({
 
   if (!displayOrder) {
     return (
-      <div className="order-placed-wrapper page-width" style={{ padding: "80px 20px", textAlign: "center" }}>
-        <PackageCheck size={56} style={{ color: "var(--forest)", opacity: 0.7, margin: "0 auto 18px" }} />
-        <h2 style={{ fontSize: "28px", color: "var(--forest-deep)", marginBottom: "10px" }}>No Active Order Found</h2>
-        <p style={{ color: "var(--muted)", maxWidth: "460px", margin: "0 auto 28px", fontSize: "15px", lineHeight: "1.6" }}>
-          We could not find a recently completed order in this session. If you have already placed an order, you can view its live status under your account.
+      <div
+        className="order-placed-wrapper page-width"
+        style={{ padding: "80px 20px", textAlign: "center" }}
+      >
+        {loadingDetail ? (
+          <Loader2
+            size={40}
+            className="spin-animate"
+            style={{ margin: "0 auto 18px" }}
+          />
+        ) : (
+          <PackageCheck
+            size={56}
+            style={{
+              color: "var(--forest)",
+              opacity: 0.7,
+              margin: "0 auto 18px",
+            }}
+          />
+        )}
+        <h2
+          style={{
+            fontSize: "28px",
+            color: "var(--forest-deep)",
+            marginBottom: "10px",
+          }}
+        >
+          {loadingDetail
+            ? "Loading Order Details"
+            : detailMode
+              ? "Order Not Found"
+              : "No Active Order Found"}
+        </h2>
+        <p
+          style={{
+            color: "var(--muted)",
+            maxWidth: "460px",
+            margin: "0 auto 28px",
+            fontSize: "15px",
+            lineHeight: "1.6",
+          }}
+        >
+          {loadingDetail
+            ? "Please wait while we retrieve this order from the database."
+            : detailMode
+              ? "We could not find this order. Return to your account to choose another order."
+              : "We could not find a recently completed order in this session. If you have already placed an order, you can view its live status under your account."}
         </p>
-        <div style={{ display: "flex", gap: "12px", justifyContent: "center", flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "12px",
+            justifyContent: "center",
+            flexWrap: "wrap",
+          }}
+        >
           <button
             type="button"
             className="app-button"
-            onClick={() => navigate("account")}
+            onClick={() => navigate("account", { tab: "orders" })}
           >
-            Go to My Account
+            {detailMode ? "Back to My Orders" : "Go to My Account"}
           </button>
           <button
             type="button"
@@ -262,7 +352,35 @@ export function OrderPlacedPage({
     }
   };
 
-  const orderDate = new Date(displayOrder.createdAt || Date.now()).toLocaleDateString("en-IN", {
+  const startReturnExchangeEmail = (event) => {
+    event.preventDefault();
+    const item = (displayOrder.items || []).find((entry, index) =>
+      String(entry.legacyId || entry.product || index) === returnRequestItem,
+    );
+    const itemName = item?.titleSnapshot || item?.title || "All items in this order";
+    const requestLabel = returnRequestType === "return" ? "Return and refund" : "Exchange";
+    const subject = `${requestLabel} request — Order ${displayOrder.orderNumber}`;
+    const body = [
+      "Hello Health With Herbal Care Team,",
+      "",
+      `I would like to request ${returnRequestType === "return" ? "a return for refund" : "an exchange"} for order ${displayOrder.orderNumber}.`,
+      `Product: ${itemName}`,
+      `Reason: ${returnRequestReason.trim() || "Please contact me to discuss this request."}`,
+      "",
+      "Please advise me before I mail the product back and provide the correct return address.",
+      "I understand eligible product returns must be unopened, unused, in new condition with original packaging and accessories, and requested within 10 days of receipt. Return shipping, insurance, and any duties are paid by the buyer.",
+      "",
+      "Thank you.",
+      currentUser?.name || "",
+      currentUser?.email || "",
+    ].join("\n");
+    window.location.href = `mailto:care@healthwithherbal.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    setReturnExchangeOpen(false);
+  };
+
+  const orderDate = new Date(
+    displayOrder.createdAt || Date.now(),
+  ).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "long",
     year: "numeric",
@@ -271,6 +389,8 @@ export function OrderPlacedPage({
   });
 
   const address = displayOrder.shippingAddress || displayOrder.customer || {};
+  const firstItemImage = orderProductImage(displayOrder.items?.[0]);
+  const additionalItemCount = Math.max(0, (displayOrder.items?.length || 0) - 1);
 
   return (
     <div className="order-placed-wrapper page-width">
@@ -278,24 +398,39 @@ export function OrderPlacedPage({
       {/* HERO BANNER: Celebration & Confirmation                             */}
       {/* =================================================================== */}
       <div className="order-placed-hero">
-        <div className="order-placed-check-circle">
-          <CheckCircle2 size={46} strokeWidth={2.2} />
-        </div>
+        {firstItemImage ? (
+          <div className="order-placed-product-cover">
+            <img src={firstItemImage} alt={displayOrder.items?.[0]?.titleSnapshot || displayOrder.items?.[0]?.title || "Ordered product"} />
+            <span className="order-product-confirmed"><CheckCircle2 size={22} strokeWidth={2.4} /></span>
+            {additionalItemCount > 0 && <span className="order-product-more">+{additionalItemCount}</span>}
+          </div>
+        ) : (
+          <div className="order-placed-check-circle">
+            <CheckCircle2 size={46} strokeWidth={2.2} />
+          </div>
+        )}
         <span className="order-placed-eyebrow">
-          <Sparkles size={14} /> ORDER CONFIRMED
+          <Sparkles size={14} />{" "}
+          {detailMode ? "ORDER DETAILS" : "ORDER CONFIRMED"}
         </span>
         <h1 className="order-placed-title">
-          Thank You for Choosing Pure Wellness
+          {detailMode
+            ? "Your Order Information"
+            : "Thank You for Choosing Pure Wellness"}
         </h1>
         <p className="order-placed-subtitle">
-          Your order has been safely placed and is now being lovingly prepared by our Ayurvedic apothecarists.
+          {detailMode
+            ? "Review the products, delivery details, payment method, and latest status for this order."
+            : "Your order has been safely placed and is now being lovingly prepared by our Ayurvedic apothecarists."}
         </p>
 
         {/* Order Identifier Tag Box */}
         <div className="order-id-badge-card">
           <div className="order-id-group">
             <span className="order-id-label">Order Reference:</span>
-            <strong className="order-id-value">{displayOrder.orderNumber}</strong>
+            <strong className="order-id-value">
+              {displayOrder.orderNumber}
+            </strong>
             <button
               type="button"
               className="copy-order-btn"
@@ -325,7 +460,9 @@ export function OrderPlacedPage({
       {/* =================================================================== */}
       <div className="order-tracker-card">
         <div className="tracker-card-top-row">
-          <h3 className="tracker-card-title">Order Status & Dispatch Timeline</h3>
+          <h3 className="tracker-card-title">
+            Order Status & Dispatch Timeline
+          </h3>
           <div className={`tracker-live-indicator status-${currentStatus}`}>
             <span className="live-pulse-dot" />
             <span className="live-status-label">
@@ -338,15 +475,22 @@ export function OrderPlacedPage({
           <div className="order-cancelled-box">
             <XCircle size={22} color="#dc2626" />
             <div>
-              <strong>This order has been cancelled by the store administrator.</strong>
-              <p>If you have any questions or require assistance, please contact our herbal care team.</p>
+              <strong>
+                This order has been cancelled by the store administrator.
+              </strong>
+              <p>
+                If you have any questions or require assistance, please contact
+                our herbal care team.
+              </p>
             </div>
           </div>
         ) : (
           <div className="order-steps-grid">
             {STAGES.map((stage, idx) => {
               const state = getStageState(idx, currentStatus);
-              const IconComponent = state.isCompleted ? CheckCircle2 : stage.icon;
+              const IconComponent = state.isCompleted
+                ? CheckCircle2
+                : stage.icon;
               return (
                 <div key={stage.key} style={{ display: "contents" }}>
                   <div
@@ -385,7 +529,9 @@ export function OrderPlacedPage({
         <div className="order-placed-main-col">
           <div className="order-receipt-card">
             <div className="receipt-card-header">
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "8px" }}
+              >
                 <Package size={18} color="var(--forest)" />
                 <h2>Items in this Order ({displayOrder.items?.length || 0})</h2>
               </div>
@@ -402,7 +548,9 @@ export function OrderPlacedPage({
                 <div className="callout-text">
                   <strong>Your herbal remedies have arrived!</strong>
                   <p>
-                    Share your authentic experience with the products below. Your feedback helps our community and herbalists maintain the highest standard of Ayurvedic purity.
+                    Share your authentic experience with the products below.
+                    Your feedback helps our community and herbalists maintain
+                    the highest standard of Ayurvedic purity.
                   </p>
                 </div>
               </div>
@@ -412,13 +560,29 @@ export function OrderPlacedPage({
               {(displayOrder.items || []).map((item, idx) => (
                 <div key={idx} className="order-placed-item-row">
                   <div className="item-icon-box">
-                    <Package size={22} />
+                    {orderProductImage(item) ? (
+                      <img className="ordered-product-image" src={orderProductImage(item)} alt={item.titleSnapshot || item.title || "Ordered product"} loading="lazy" />
+                    ) : <Package size={22} />}
                   </div>
                   <div className="item-text-info">
-                    <strong className="item-title">{item.titleSnapshot || item.title}</strong>
-                    <span className="item-brand">{item.brandSnapshot || item.brand || "Health with Herbal"}</span>
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "6px", flexWrap: "wrap" }}>
-                      <span className="item-qty-tag">Quantity: {item.quantity}</span>
+                    <strong className="item-title">
+                      {item.titleSnapshot || item.title}
+                    </strong>
+                    <span className="item-brand">
+                      {item.brandSnapshot || item.brand || "Health with Herbal"}
+                    </span>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        marginTop: "6px",
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      <span className="item-qty-tag">
+                        Quantity: {item.quantity}
+                      </span>
                       {currentStatus === "delivered" && (
                         <button
                           type="button"
@@ -459,18 +623,28 @@ export function OrderPlacedPage({
             <div className="order-totals-breakdown">
               <div className="totals-line">
                 <span>Subtotal</span>
-                <strong>₹{displayOrder.subtotal?.toFixed ? displayOrder.subtotal.toFixed(2) : displayOrder.subtotal}</strong>
+                <strong>
+                  ₹
+                  {displayOrder.subtotal?.toFixed
+                    ? displayOrder.subtotal.toFixed(2)
+                    : displayOrder.subtotal}
+                </strong>
               </div>
               <div className="totals-line">
                 <span>Shipping Fee</span>
                 <strong>
-                  {displayOrder.shipping === 0 ? "FREE" : `₹${displayOrder.shipping}`}
+                  {displayOrder.shipping === 0
+                    ? "FREE"
+                    : `₹${displayOrder.shipping}`}
                 </strong>
               </div>
               {displayOrder.discount > 0 && (
                 <div className="totals-line discount">
                   <span>
-                    Discount Applied {displayOrder.couponCode ? `(${displayOrder.couponCode})` : ""}
+                    Discount Applied{" "}
+                    {displayOrder.couponCode
+                      ? `(${displayOrder.couponCode})`
+                      : ""}
                   </span>
                   <strong>-₹{displayOrder.discount}</strong>
                 </div>
@@ -478,7 +652,10 @@ export function OrderPlacedPage({
               <div className="totals-line grand-total">
                 <span>Total Amount</span>
                 <span className="grand-total-amount">
-                  ₹{displayOrder.total?.toFixed ? displayOrder.total.toFixed(2) : displayOrder.total}
+                  ₹
+                  {displayOrder.total?.toFixed
+                    ? displayOrder.total.toFixed(2)
+                    : displayOrder.total}
                 </span>
               </div>
             </div>
@@ -531,10 +708,50 @@ export function OrderPlacedPage({
                 </span>
               </div>
               <p className="payment-instructions">
-                No prepayment required. Please keep ₹{displayOrder.total} in cash or UPI ready when our courier partner arrives at your address.
+                No prepayment required. Please keep ₹{displayOrder.total} in
+                cash or UPI ready when our courier partner arrives at your
+                address.
               </p>
             </div>
           </div>
+
+          {displayOrder.trackingId && (
+            <div className="order-info-card">
+              <div className="info-card-header">
+                <Truck size={17} color="var(--forest)" />
+                <h3>Shipment Tracking</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="contact-row">
+                  <span>Tracking ID:</span>{" "}
+                  <strong>{displayOrder.trackingId}</strong>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {displayOrder.billingAddress && (
+            <div className="order-info-card">
+              <div className="info-card-header">
+                <FileText size={17} color="var(--forest)" />
+                <h3>Billing Address</h3>
+              </div>
+              <div className="info-card-body">
+                <div className="recipient-name">
+                  {displayOrder.billingAddress.firstName}{" "}
+                  {displayOrder.billingAddress.lastName}
+                </div>
+                <p className="address-lines">
+                  {displayOrder.billingAddress.street}
+                  <br />
+                  {displayOrder.billingAddress.city},{" "}
+                  {displayOrder.billingAddress.postalCode}
+                  <br />
+                  {displayOrder.billingAddress.country || "India"}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Support / Herbal Guarantee */}
           <div className="order-guarantee-card">
@@ -542,7 +759,8 @@ export function OrderPlacedPage({
             <div>
               <strong>Questions or changes?</strong>
               <p>
-                Email us at <em>care@healthwithherbal.com</em> with your order reference <strong>{displayOrder.orderNumber}</strong>.
+                Email us at <em>care@healthwithherbal.com</em> with your order
+                reference <strong>{displayOrder.orderNumber}</strong>.
               </p>
             </div>
           </div>
@@ -552,7 +770,34 @@ export function OrderPlacedPage({
       {/* =================================================================== */}
       {/* BOTTOM ACTIONS                                                      */}
       {/* =================================================================== */}
+      {detailMode && currentStatus === "delivered" && (
+        <section className="return-exchange-panel">
+          <div>
+            <span className="return-exchange-eyebrow">Delivered order support</span>
+            <h2>Need a return or exchange?</h2>
+            <p>
+              Unopened and unused products in new condition, with original packaging and accessories, can be requested for a 100% refund within 10 days of receipt. Buyers pay return shipping, insurance, and any duties. Please contact us before mailing anything back.
+            </p>
+          </div>
+          <button type="button" className="app-button" onClick={() => setReturnExchangeOpen(true)}>
+            Request return or exchange
+          </button>
+        </section>
+      )}
       <div className="order-placed-actions-row">
+        {detailMode && currentStatus === "delivered" && (
+          <button
+            type="button"
+            className="app-button continue-btn"
+            onClick={() =>
+              navigate("order-invoice", {
+                orderId: displayOrder.orderNumber || displayOrder._id,
+              })
+            }
+          >
+            <FileText size={17} /> Generate Invoice
+          </button>
+        )}
         <button
           type="button"
           className="app-button continue-btn"
@@ -564,19 +809,43 @@ export function OrderPlacedPage({
         <button
           type="button"
           className="account-orders-cta-btn"
-          onClick={() => navigate("account")}
+          onClick={() => navigate("account", { tab: "orders" })}
         >
-          View in My Orders <ArrowRight size={16} />
-        </button>
-
-        <button
-          type="button"
-          className="print-receipt-btn"
-          onClick={() => window.print()}
-        >
-          <Printer size={16} /> Print Receipt
+          {detailMode ? "Back to My Orders" : "View in My Orders"}{" "}
+          <ArrowRight size={16} />
         </button>
       </div>
+
+      {returnExchangeOpen && (
+        <div className="return-exchange-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setReturnExchangeOpen(false); }}>
+          <section className="return-exchange-dialog" role="dialog" aria-modal="true" aria-labelledby="return-exchange-title">
+            <button type="button" className="return-exchange-close" aria-label="Close" onClick={() => setReturnExchangeOpen(false)}>×</button>
+            <span className="return-exchange-eyebrow">Order {displayOrder.orderNumber}</span>
+            <h2 id="return-exchange-title">Return or exchange request</h2>
+            <p className="return-exchange-help">This opens an email to our care team. Please wait for our return instructions before mailing the product.</p>
+            <form onSubmit={startReturnExchangeEmail}>
+              <fieldset className="return-exchange-options">
+                <legend>What would you like to request?</legend>
+                <label><input type="radio" name="requestType" value="return" checked={returnRequestType === "return"} onChange={() => setReturnRequestType("return")} /> Return for refund</label>
+                <label><input type="radio" name="requestType" value="exchange" checked={returnRequestType === "exchange"} onChange={() => setReturnRequestType("exchange")} /> Exchange (subject to confirmation)</label>
+              </fieldset>
+              <label className="return-exchange-field">Product
+                <select value={returnRequestItem} onChange={(event) => setReturnRequestItem(event.target.value)}>
+                  <option value="">All items / not sure</option>
+                  {(displayOrder.items || []).map((item, index) => <option key={`${item.legacyId || item.product || index}`} value={String(item.legacyId || item.product || index)}>{item.titleSnapshot || item.title} · Qty {item.quantity}</option>)}
+                </select>
+              </label>
+              <label className="return-exchange-field">Reason (optional)
+                <textarea rows={3} value={returnRequestReason} onChange={(event) => setReturnRequestReason(event.target.value)} placeholder="Tell us how we can help" />
+              </label>
+              <div className="return-exchange-dialog-actions">
+                <button type="button" className="app-button secondary" onClick={() => setReturnExchangeOpen(false)}>Cancel</button>
+                <button type="submit" className="app-button">Email care team</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
 
       {/* Product Review Modal for Delivered Orders */}
       <ProductReviewModal

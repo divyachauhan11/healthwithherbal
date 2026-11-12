@@ -11,8 +11,30 @@ const User = require("../models/User");
 const Cart = require("../models/Cart");
 const CartItem = require("../models/CartItem");
 const StoreSetting = require("../models/StoreSetting");
+const { isCouponExpired } = require("../utils/couponExpiry");
 
 const router = express.Router();
+
+async function getStoreCategories() {
+  const [categories, parentIds] = await Promise.all([
+    Category.find({ isActive: true, isParent: { $ne: true } }).sort({ name: 1 }).lean(),
+    Category.distinct("parentId", { parentId: { $ne: null } }),
+  ]);
+  const parentIdSet = new Set(parentIds.map(String));
+  return categories.filter((category) => !parentIdSet.has(String(category._id)));
+}
+
+async function getStoreNavigationCategories() {
+  const [categories, parentIds] = await Promise.all([
+    Category.find({ isActive: true }).sort({ name: 1 }).lean(),
+    Category.distinct("parentId", { parentId: { $ne: null } }),
+  ]);
+  const parentIdSet = new Set(parentIds.map(String));
+  return categories.map((category) => ({
+    ...category,
+    isParent: Boolean(category.isParent || parentIdSet.has(String(category._id))),
+  }));
+}
 
 // Indian postal PIN code prefixes by state/UT
 const STATE_PIN_PREFIXES = {
@@ -40,20 +62,16 @@ const STATE_PIN_PREFIXES = {
 router.get(
   "/init",
   asyncHandler(async (_req, res) => {
-    const [productsRaw, categories, brands, coupons, blogs, reviews, announcementSetting] =
+    const [productsRaw, categories, navigationCategories, brands, coupons, blogs, reviews, announcementSetting, featuredCategorySetting] =
       await Promise.all([
         Product.find({ active: true }).sort({ legacyId: 1 }).lean(),
-        Category.find({ isActive: true }).sort({ name: 1 }).lean(),
+        getStoreCategories(),
+        getStoreNavigationCategories(),
         Brand.find({ isActive: { $ne: false } }).sort({ name: 1 }).lean(),
-        Coupon.find({
-          isActive: true,
-          $or: [
-            { expiresAt: { $exists: false } },
-            { expiresAt: { $gte: new Date() } },
-          ],
-        })
+        Coupon.find({ isActive: true })
           .sort({ createdAt: -1 })
-          .lean(),
+          .lean()
+          .then((items) => items.filter((coupon) => !isCouponExpired(coupon.expiresAt))),
         BlogPost.find({ status: "published" })
           .populate("authorId", "name email")
           .sort({ publishedAt: -1 })
@@ -65,7 +83,18 @@ router.get(
           .limit(20)
           .lean(),
         StoreSetting.findOne({ key: "announcements" }).lean(),
+        StoreSetting.findOne({ key: "featuredParentCategories" }).lean(),
       ]);
+
+    const parentCategories = navigationCategories.filter((category) => category.isParent);
+    const selectedFeaturedIds = Array.isArray(featuredCategorySetting?.value)
+      ? featuredCategorySetting.value.map(String)
+      : [];
+    const availableParentIds = new Set(parentCategories.map((category) => String(category._id)));
+    const featuredCategoryIds = selectedFeaturedIds.filter((id) => availableParentIds.has(id));
+    const effectiveFeaturedCategoryIds = featuredCategoryIds.length
+      ? featuredCategoryIds.slice(0, 4)
+      : parentCategories.slice(0, 4).map((category) => String(category._id));
 
     const products = productsRaw.map(({ legacyId, ...p }) => ({
       ...p,
@@ -77,6 +106,8 @@ router.get(
     res.json({
       products,
       categories,
+      navigationCategories,
+      featuredCategoryIds: effectiveFeaturedCategoryIds,
       brands,
       coupons,
       announcements: Array.isArray(announcementSetting?.value) ? announcementSetting.value : [],
@@ -112,9 +143,7 @@ router.get(
 router.get(
   "/categories",
   asyncHandler(async (_req, res) => {
-    const categories = await Category.find({ isActive: true })
-      .sort({ name: 1 })
-      .lean();
+    const categories = await getStoreCategories();
     res.json(categories);
   }),
 );
@@ -134,13 +163,9 @@ router.get(
 router.get(
   "/coupons",
   asyncHandler(async (_req, res) => {
-    const coupons = await Coupon.find({
-      isActive: true,
-      $or: [
-        { expiresAt: { $exists: false } },
-        { expiresAt: { $gte: new Date() } },
-      ],
-    }).lean();
+    const coupons = (await Coupon.find({ isActive: true }).lean()).filter(
+      (coupon) => !isCouponExpired(coupon.expiresAt),
+    );
     res.json(coupons);
   }),
 );
@@ -155,16 +180,9 @@ router.get(
     if (!code)
       return res.status(400).json({ error: "Coupon code is required." });
 
-    const coupon = await Coupon.findOne({
-      code,
-      isActive: true,
-      $or: [
-        { expiresAt: { $exists: false } },
-        { expiresAt: { $gte: new Date() } },
-      ],
-    }).lean();
+    const coupon = await Coupon.findOne({ code, isActive: true }).lean();
 
-    if (!coupon)
+    if (!coupon || isCouponExpired(coupon.expiresAt))
       return res.status(404).json({ error: "Invalid or expired coupon code." });
     res.json({ valid: true, coupon });
   }),

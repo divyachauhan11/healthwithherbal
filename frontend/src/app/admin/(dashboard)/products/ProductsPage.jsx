@@ -13,6 +13,8 @@ export default function ProductsPage({
   remove,
   onToggleActive,
   busy,
+  categoryScopeName = "",
+  onClearCategoryScope,
 }) {
   return (
     <section className="panel page-panel">
@@ -29,6 +31,14 @@ export default function ProductsPage({
           <Plus size={16} /> Add new product
         </button>
       </div>
+
+      {categoryScopeName && (
+        <div className="products-category-scope" role="status">
+          <span>Showing products grouped under</span>
+          <strong>{categoryScopeName}</strong>
+          <button type="button" onClick={onClearCategoryScope}>Clear filter</button>
+        </div>
+      )}
 
       <ProductTable
         rows={rows}

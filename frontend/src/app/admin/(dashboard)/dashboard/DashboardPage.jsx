@@ -266,6 +266,7 @@ export default function DashboardPage({
           <OrderTable
             rows={dashboard.recentOrders || []}
             compact
+            pageSize={7}
             onStatus={onRefresh}
           />
         </article>

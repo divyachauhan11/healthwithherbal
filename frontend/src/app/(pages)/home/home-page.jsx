@@ -9,7 +9,6 @@ import {
   Sparkles,
   Truck,
 } from "lucide-react";
-import { primaryCategories } from "../../../lib/store-data";
 import {
   AppButton,
   Rating,
@@ -23,6 +22,7 @@ import { WhyHealthWithHerbal } from "../../../components/custom/sections/why-sec
 export function HomePage({
   navigate,
   openCatalog,
+  openContent,
   onAdd,
   cart,
   wished,
@@ -30,6 +30,8 @@ export function HomePage({
   openProduct,
   products = [],
   categories = [],
+  navigationCategories = [],
+  featuredCategoryIds = [],
   brands = [],
   coupons = [],
   blogs = [],
@@ -41,6 +43,11 @@ export function HomePage({
   const displayedConcerns = categories
     .filter((c) => c && c.type === "concern")
     .map((c) => (typeof c === "string" ? c : c.name));
+  const featuredCategoryIdSet = new Set(featuredCategoryIds.map(String));
+  const featuredCategories = navigationCategories
+    .filter((category) => category && category.isParent && featuredCategoryIdSet.has(String(category._id || category.id)))
+    .slice(0, 4);
+  const categoryTones = ["ochre", "green", "rose", "blue"];
 
   // High rating products in decreasing order for Our Bestsellers
   const bestsellerProducts = useMemo(() => {
@@ -87,8 +94,8 @@ export function HomePage({
               >
                 Explore all products <ArrowRight size={17} />
               </AppButton>
-              <AppButton variant="ghost" onClick={() => navigate("info")}>
-                Our philosophy
+              <AppButton variant="ghost" onClick={() => openContent("Our Story")}>
+                Our story
               </AppButton>
             </div>
             <div className="hero-proof">
@@ -170,17 +177,17 @@ export function HomePage({
           centered
         />
         <div className="category-grid">
-          {primaryCategories.map((category) => (
+          {featuredCategories.map((category, index) => (
             <button
               type="button"
-              className={`category-card ${category.tone}`}
-              key={category.name}
+              className={`category-card ${categoryTones[index % categoryTones.length]}`}
+              key={category._id || category.id || category.slug || category.name}
               onClick={() => openCatalog(category.name)}
             >
-              <span className="category-letter">{category.icon}</span>
+              <span className="category-letter">{category.name?.charAt(0)}</span>
               <span>
                 <strong>{category.name}</strong>
-                <small>{category.note}</small>
+                <small>{category.description || "Explore this collection"}</small>
               </span>
               <ChevronRight />
             </button>
@@ -213,6 +220,7 @@ export function HomePage({
                 onWish={() => onWish(product.id)}
                 onAdd={() => onAdd(product.id)}
                 onOpen={() => openProduct(product.id)}
+                onSimilar={() => openCatalog(product.category || "All Products")}
               />
             ))}
           </div>
@@ -275,7 +283,7 @@ export function HomePage({
             <button
               type="button"
               className="text-link light"
-              onClick={() => navigate("info")}
+              onClick={() => openContent("Our Story")}
             >
               Discover our story <ArrowRight size={16} />
             </button>
@@ -324,6 +332,7 @@ export function HomePage({
               onWish={() => onWish(product.id)}
               onAdd={() => onAdd(product.id)}
               onOpen={() => openProduct(product.id)}
+              onSimilar={() => openCatalog(product.category || "All Products")}
             />
           ))}
         </div>

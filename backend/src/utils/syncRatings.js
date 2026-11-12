@@ -42,17 +42,39 @@ async function syncProductRating(productId) {
  */
 async function syncAllProductRatings() {
   try {
-    const products = await Product.find().select("_id title").lean();
-    console.log(`Synchronizing real ratings for ${products.length} products...`);
+    const stats = await ProductReview.aggregate([
+      { $match: { isApproved: true } },
+      {
+        $group: {
+          _id: "$productId",
+          avgRating: { $avg: "$rating" },
+          reviewCount: { $sum: 1 },
+        },
+      },
+    ]);
+    const statsMap = new Map(
+      stats.map((s) => [
+        String(s._id),
+        { rating: Number(s.avgRating.toFixed(1)), reviews: s.reviewCount },
+      ]),
+    );
 
-    const results = [];
-    for (const p of products) {
-      const res = await syncProductRating(p._id);
-      if (res) results.push({ title: p.title, ...res });
+    const products = await Product.find().select("_id").lean();
+    const bulkOps = products.map((p) => {
+      const st = statsMap.get(String(p._id)) || { rating: 0, reviews: 0 };
+      return {
+        updateOne: {
+          filter: { _id: p._id },
+          update: { $set: { rating: st.rating, reviews: st.reviews } },
+        },
+      };
+    });
+
+    if (bulkOps.length > 0) {
+      await Product.bulkWrite(bulkOps);
     }
-
     console.log("Product ratings synchronized with real approved reviews.");
-    return results;
+    return [];
   } catch (error) {
     console.error("Failed to sync all product ratings:", error.message);
     return [];

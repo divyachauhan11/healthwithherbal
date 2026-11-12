@@ -20,6 +20,7 @@ export function Modal({
   showFooter = true,
   footer,
   children,
+  className = "",
 }) {
   const modalRef = useRef(null);
 
@@ -106,7 +107,7 @@ export function Modal({
 
   return (
     <div
-      className="admin-modal-backdrop"
+      className={`admin-modal-backdrop ${className}`.trim()}
       onClick={(e) => {
         if (e.target === e.currentTarget && !busy) {
           onClose?.();
@@ -115,7 +116,7 @@ export function Modal({
       role="dialog"
       aria-modal="true"
     >
-      <div className="admin-modal-card" ref={modalRef} style={{ maxWidth }}>
+      <div className={`admin-modal-card ${className}`.trim()} ref={modalRef} style={{ maxWidth }}>
         {onSubmit ? (
           <form onSubmit={onSubmit} className="admin-modal-form">
             {content}

@@ -7,6 +7,7 @@ const schema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    isParent: { type: Boolean, default: false, index: true },
     name: { type: String, required: true, trim: true },
     slug: { type: String, required: true, lowercase: true, unique: true },
     type: { type: String, default: "concern" },

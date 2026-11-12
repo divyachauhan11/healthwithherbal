@@ -2,6 +2,17 @@ const API_BASE_URL = (
   process.env.NEXT_PUBLIC_API_URL || "/api"
 ).replace(/\/$/, "");
 
+export async function submitContactMessage(payload) {
+  const response = await fetch(`${API_BASE_URL}/contact`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.error || "Could not send your message.");
+  return result;
+}
+
 export async function createOrder(payload) {
   const response = await fetch(`${API_BASE_URL}/orders`, {
     method: "POST",
@@ -57,8 +68,11 @@ export async function fetchStoreInit() {
     cache: "no-store",
   });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok)
-    throw new Error(result.error || "Could not load store database.");
+  if (!response.ok) {
+    throw new Error(
+      result.error || `Could not load store database (HTTP ${response.status}).`,
+    );
+  }
   return result;
 }
 
@@ -197,7 +211,7 @@ export async function verifyLoginOtp({ phone, email, identifier, otp }) {
     err.notRegistered = Boolean(data.notRegistered);
     throw err;
   }
-  return data.user;
+  return { ...data.user, sessionToken: data.token };
 }
 
 export async function requestSignupOtp({ name, email, phone }) {
@@ -227,7 +241,7 @@ export async function verifySignupOtp({ name, email, phone, otp }) {
     err.status = response.status;
     throw err;
   }
-  return data.user;
+  return { ...data.user, sessionToken: data.token };
 }
 
 export async function socialLogin(payload) {
@@ -240,7 +254,42 @@ export async function socialLogin(payload) {
   if (!response.ok) {
     throw new Error(data.error || "Social authentication failed");
   }
-  return data.user;
+  return { ...data.user, sessionToken: data.token };
+}
+
+function userAuthHeaders() {
+  const token = typeof window !== "undefined" ? localStorage.getItem("hwh_session_token") : "";
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+export async function fetchUserWishlist() {
+  const headers = userAuthHeaders();
+  if (!headers.Authorization) return [];
+  const response = await fetch(`${API_BASE_URL}/user/wishlist`, { headers, cache: "no-store" });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const error = new Error(data.error || `Could not load your wishlist (HTTP ${response.status}).`);
+    error.status = response.status;
+    throw error;
+  }
+  return data.items || [];
+}
+
+export async function addUserWishlistItem(productId) {
+  const response = await fetch(`${API_BASE_URL}/user/wishlist`, {
+    method: "POST", headers: { "Content-Type": "application/json", ...userAuthHeaders() },
+    body: JSON.stringify({ productId }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Could not save this item.");
+}
+
+export async function removeUserWishlistItem(productId) {
+  const response = await fetch(`${API_BASE_URL}/user/wishlist/${encodeURIComponent(productId)}`, {
+    method: "DELETE", headers: userAuthHeaders(),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || "Could not remove this item.");
 }
 
 export async function fetchUserOrders({ phone, email, userId } = {}) {
@@ -273,7 +322,9 @@ export async function fetchUserAddresses({ phone, email, userId } = {}) {
     },
   );
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) return [];
+  if (!response.ok) {
+    throw new Error(data.error || "Could not load saved addresses.");
+  }
   return data.addresses || [];
 }
 
@@ -286,6 +337,19 @@ export async function saveUserAddress(payload) {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(data.error || "Could not save address.");
+  }
+  return data.address;
+}
+
+export async function updateUserAddress(id, payload) {
+  const response = await fetch(`${API_BASE_URL}/user/addresses/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || "Could not update address.");
   }
   return data.address;
 }

@@ -31,32 +31,17 @@ export async function adminRequest(path, { token, method = "GET", body } = {}) {
 }
 
 export async function adminUploadRequest(files, { token } = {}) {
-  const formData = new FormData();
-  if (files instanceof FormData) {
-    const adminToken =
-      token ||
-      (typeof window !== "undefined"
-        ? window.localStorage.getItem("hwh-admin-session")
-        : "");
-    const response = await fetch(`${API_BASE_URL}/admin/upload`, {
-      method: "POST",
-      headers: {
-        ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
-      },
-      body: files,
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok)
-      throw new Error(result.error || "The image upload failed.");
-    return result;
-  }
+  const isFormData = files instanceof FormData;
+  const formData = isFormData ? files : new FormData();
 
-  if (Array.isArray(files)) {
-    files.forEach((file) => formData.append("images", file));
-  } else if (typeof FileList !== "undefined" && files instanceof FileList) {
-    Array.from(files).forEach((file) => formData.append("images", file));
-  } else if (files) {
-    formData.append("images", files);
+  if (!isFormData) {
+    if (Array.isArray(files)) {
+      files.forEach((file) => formData.append("images", file));
+    } else if (typeof FileList !== "undefined" && files instanceof FileList) {
+      Array.from(files).forEach((file) => formData.append("images", file));
+    } else if (files) {
+      formData.append("images", files);
+    }
   }
 
   const adminToken =

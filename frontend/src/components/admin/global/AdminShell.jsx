@@ -1,5 +1,6 @@
 import {
   Bell,
+  AlertTriangle,
   BookOpen,
   FileText,
   LayoutDashboard,
@@ -19,6 +20,7 @@ import {
 const navigation = [
   ["Dashboard", LayoutDashboard],
   ["Products", Package],
+  ["Low Stock", AlertTriangle],
   ["Categories", BookOpen],
   ["Brands", Star],
   ["Coupons", Tag],
@@ -39,6 +41,7 @@ export function AdminSidebar({
   sidebarOpen,
   setSidebarOpen,
   pendingOrders,
+  allowedPages,
 }) {
   return (
     <aside className={sidebarOpen ? "sidebar open" : "sidebar"}>
@@ -94,7 +97,7 @@ export function AdminSidebar({
         </button>
       </div>
       <nav>
-        {navigation.map(([label, Icon]) => (
+        {navigation.filter(([label]) => !allowedPages || allowedPages.includes(label)).map(([label, Icon]) => (
           <button
             key={label}
             className={page === label ? "active" : ""}

@@ -11,7 +11,7 @@ export const dateLabel = (value) =>
         month: "short",
         year: "numeric",
       })
-    : " ";
+    : "—";
 export const slugify = (text = "") =>
   text
     .toLowerCase()

@@ -11,7 +11,10 @@ export function WishlistPage({
   products: productsProp = [],
 }) {
   const activeProducts = productsProp || [];
-  const wishedItems = activeProducts.filter((p) => wished.includes(p.id) || wished.includes(p._id));
+  const wishedIds = new Set(wished.map((id) => String(id)));
+  const wishedItems = activeProducts.filter((product) =>
+    wishedIds.has(String(product.id ?? product._id)),
+  );
   return (
     <main className="page-width wishlist-page" style={{ padding: "40px 0" }}>
       <div className="breadcrumbs">
@@ -55,6 +58,7 @@ export function WishlistPage({
               onWish={() => onWish(product.id)}
               onAdd={() => onAdd(product.id)}
               onOpen={() => openProduct(product.id)}
+              onSimilar={() => openCatalog?.(product.category || "All Products")}
             />
           ))}
         </div>

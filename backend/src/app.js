@@ -9,6 +9,7 @@ const adminRoutes = require("./routes/adminRoutes");
 const storeRoutes = require("./routes/storeRoutes");
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
+const contactRoutes = require("./routes/contactRoutes");
 const { errorHandler } = require("./middleware/errorHandler");
 
 const path = require("node:path");
@@ -41,6 +42,7 @@ app.get("/api/health", (req, res) =>
 );
 app.use("/api/auth", authRoutes);
 app.use("/api/user", userRoutes);
+app.use("/api/contact", contactRoutes);
 app.use("/api/store", storeRoutes);
 app.use("/api", storeRoutes);
 app.use("/api/products", productRoutes);

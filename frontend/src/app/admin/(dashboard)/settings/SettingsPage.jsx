@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Settings, ShieldCheck, Database, CheckCircle2, ArrowRight, Plus, Trash2, Save, Megaphone, Pencil, X } from "lucide-react";
+import { Settings, Plus, Trash2, Save, Megaphone, Pencil, X, Tags } from "lucide-react";
 import { adminRequest } from "../../../../lib/admin-api";
 
-export default function SettingsPage({ user, token, onNavigate }) {
+export default function SettingsPage({ token }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(true);
   const [savingAnnouncements, setSavingAnnouncements] = useState(false);
@@ -12,6 +12,11 @@ export default function SettingsPage({ user, token, onNavigate }) {
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   const [announcementDraft, setAnnouncementDraft] = useState("");
   const [settingsSection, setSettingsSection] = useState("announcements");
+  const [parentCategories, setParentCategories] = useState([]);
+  const [featuredCategoryIds, setFeaturedCategoryIds] = useState([]);
+  const [loadingFeaturedCategories, setLoadingFeaturedCategories] = useState(true);
+  const [savingFeaturedCategories, setSavingFeaturedCategories] = useState(false);
+  const [featuredCategoryMessage, setFeaturedCategoryMessage] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -25,6 +30,47 @@ export default function SettingsPage({ user, token, onNavigate }) {
       .finally(() => { if (active) setLoadingAnnouncements(false); });
     return () => { active = false; };
   }, [token]);
+
+  useEffect(() => {
+    let active = true;
+    adminRequest("/settings/featured-categories", { token })
+      .then((data) => {
+        if (!active) return;
+        setParentCategories(Array.isArray(data.categories) ? data.categories : []);
+        setFeaturedCategoryIds(Array.isArray(data.selectedIds) ? data.selectedIds.map(String) : []);
+      })
+      .catch((error) => {
+        if (active) setFeaturedCategoryMessage(error.message || "Could not load featured categories.");
+      })
+      .finally(() => { if (active) setLoadingFeaturedCategories(false); });
+    return () => { active = false; };
+  }, [token]);
+
+  const toggleFeaturedCategory = (id) => {
+    const categoryId = String(id);
+    setFeaturedCategoryIds((current) => current.includes(categoryId)
+      ? current.filter((value) => value !== categoryId)
+      : current.length < 4 ? [...current, categoryId] : current);
+    setFeaturedCategoryMessage("");
+  };
+
+  const saveFeaturedCategories = async () => {
+    setSavingFeaturedCategories(true);
+    setFeaturedCategoryMessage("");
+    try {
+      const data = await adminRequest("/settings/featured-categories", {
+        token,
+        method: "PUT",
+        body: { categoryIds: featuredCategoryIds },
+      });
+      setFeaturedCategoryIds(Array.isArray(data.selectedIds) ? data.selectedIds.map(String) : []);
+      setFeaturedCategoryMessage("Homepage categories saved and published.");
+    } catch (error) {
+      setFeaturedCategoryMessage(error.message || "Could not save homepage categories.");
+    } finally {
+      setSavingFeaturedCategories(false);
+    }
+  };
 
   const persistAnnouncements = async (nextAnnouncements) => {
     setSavingAnnouncements(true);
@@ -102,7 +148,7 @@ export default function SettingsPage({ user, token, onNavigate }) {
           onClick={() => setSettingsSection("store")}
           style={{ display: "inline-flex", alignItems: "center", gap: 8, whiteSpace: "nowrap", border: 0, borderRadius: 8, padding: "10px 14px", cursor: "pointer", fontWeight: 700, background: settingsSection === "store" ? "var(--forest, #153a2f)" : "transparent", color: settingsSection === "store" ? "#fff" : "#52645d" }}
         >
-          <Settings size={16} /> Store Configuration
+          <Tags size={16} /> Featured parent categories
         </button>
       </nav>
 
@@ -164,63 +210,39 @@ export default function SettingsPage({ user, token, onNavigate }) {
       </section>}
 
       {settingsSection === "store" && <section className="settings-card">
-        <div className="settings-card-header">
+        <div className="settings-card-header" style={{ marginTop: 24 }}>
           <div>
-            <span className="settings-eyebrow">
-              <ShieldCheck size={13} /> SECURITY & ACCESS
-            </span>
-            <h3>Store Configuration</h3>
-            <p>
-              Admin credentials and database connections are controlled by server-side environment variables.
-            </p>
+            <span className="settings-eyebrow"><Tags size={13} /> HOMEPAGE DISPLAY</span>
+            <h3>Featured parent categories</h3>
+            <p>Choose the four active parent categories to show in the homepage category section.</p>
           </div>
+          <button
+            type="button"
+            className="primary"
+            onClick={saveFeaturedCategories}
+            disabled={loadingFeaturedCategories || savingFeaturedCategories || featuredCategoryIds.length !== Math.min(4, parentCategories.length)}
+          >
+            <Save size={16} /> {savingFeaturedCategories ? "Saving…" : "Save selection"}
+          </button>
         </div>
-
-        <div className="settings-system-grid">
-          <div className="settings-system-box">
-            <strong>Administrator Account</strong>
-            <p>{user?.email || "admin@healthwithherbal.com"}</p>
-            <div style={{ marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#059669", fontWeight: 600 }}>
-              <CheckCircle2 size={14} /> Full Access Role
-            </div>
+        {featuredCategoryMessage && <p role="status" className="announcement-feedback">{featuredCategoryMessage}</p>}
+        {loadingFeaturedCategories ? <p>Loading parent categories…</p> : parentCategories.length === 0 ? (
+          <p className="announcement-empty">Create active parent categories first to feature them on the homepage.</p>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, margin: "14px 0 24px" }}>
+            {parentCategories.map((category) => {
+              const id = String(category._id);
+              const checked = featuredCategoryIds.includes(id);
+              return (
+                <label key={id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 15px", border: `1px solid ${checked ? "#a85a37" : "#e7e2dc"}`, borderRadius: 10, background: checked ? "#fbf3ed" : "#fff", cursor: checked || featuredCategoryIds.length < 4 ? "pointer" : "not-allowed", opacity: !checked && featuredCategoryIds.length >= 4 ? 0.6 : 1 }}>
+                  <input type="checkbox" checked={checked} onChange={() => toggleFeaturedCategory(id)} disabled={!checked && featuredCategoryIds.length >= 4} />
+                  <span style={{ fontWeight: 650, color: "#402514" }}>{category.name}</span>
+                </label>
+              );
+            })}
           </div>
+        )}
 
-          <div className="settings-system-box">
-            <strong>Database Connection</strong>
-            <p>MongoDB Atlas Cluster connected with automated index synchronization.</p>
-            <div style={{ marginTop: "10px", display: "inline-flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#059669", fontWeight: 600 }}>
-              <Database size={14} /> Active & Operational
-            </div>
-          </div>
-
-          <div className="settings-system-box">
-            <strong>Product Badges & New Launches</strong>
-            <p>
-              To feature a product in the storefront <b>New launches</b> section, simply set its <b>Badge (Tag)</b> to <b>&ldquo;New&rdquo;</b> when creating or editing a product in the Products tab.
-            </p>
-            {onNavigate && (
-              <button
-                type="button"
-                onClick={() => onNavigate("Products")}
-                style={{
-                  marginTop: "10px",
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  fontSize: "12px",
-                  color: "var(--forest, #153a2f)",
-                  fontWeight: 700,
-                  background: "transparent",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                }}
-              >
-                Go to Products <ArrowRight size={13} />
-              </button>
-            )}
-          </div>
-        </div>
       </section>}
     </div>
   );

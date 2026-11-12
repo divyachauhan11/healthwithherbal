@@ -25,6 +25,7 @@ export function ProductPage({
   added,
   cart,
   openProduct,
+  openCatalog,
   products = [],
   reviews = [],
 }) {
@@ -220,13 +221,16 @@ export function ProductPage({
               </button>
             </div>
             <AppButton
-              className={`add-detail ${added ? "already-added" : ""}`}
+              className={`add-detail ${added ? "already-added" : ""}${product.stockQty !== undefined && product.stockQty !== null && Number(product.stockQty) <= 0 ? " out-of-stock-detail" : ""}`}
               onClick={() => onAdd(product.id, quantity)}
+              disabled={added || (product.stockQty !== undefined && product.stockQty !== null && Number(product.stockQty) <= 0)}
             >
               {added ? <Check size={17} /> : <ShoppingBag size={17} />}{" "}
               {added
                 ? "Already in your bag"
-                : `Add to bag · ₹${(product.price * quantity).toFixed(2)}`}
+                : (product.stockQty !== undefined && product.stockQty !== null && Number(product.stockQty) <= 0)
+                  ? "OUT OF STOCK"
+                  : `Add to bag · ₹${(product.price * quantity).toFixed(2)}`}
             </AppButton>
             <AppButton
               variant="outline"
@@ -366,6 +370,7 @@ export function ProductPage({
               added={cart.includes(relProduct.id)}
               onWish={() => onWish(relProduct.id)}
               onAdd={() => onAdd(relProduct.id)}
+              onSimilar={() => openCatalog?.(relProduct.category || product.category || "All Products")}
               onOpen={() => {
                 openProduct(relProduct.id);
                 window.scrollTo({ top: 0, behavior: "smooth" });

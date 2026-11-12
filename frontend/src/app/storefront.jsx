@@ -1,7 +1,7 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Check } from "lucide-react";
-import { fetchStoreInit, fetchCartFromBackend } from "../lib/api";
+import { fetchStoreInit, fetchCartFromBackend, syncCartWithBackend, fetchUserWishlist, addUserWishlistItem, removeUserWishlistItem } from "../lib/api";
 import { Header, AuthModal, CartDrawer, Footer } from "../components/global";
 import {
   BlogPage,
@@ -9,12 +9,12 @@ import {
   ShopPage,
   ProductPage,
   WishlistPage,
-  InfoPage,
   ContentPage,
   CheckoutPage,
   AccountPage,
   OrderPlacedPage,
 } from "../components/custom";
+import { OrderInvoicePage } from "./(pages)/order-confirmation/order-invoice-page";
 
 const contentSlug = (value) =>
   String(value || "our-story")
@@ -23,14 +23,31 @@ const contentSlug = (value) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
-const contentPages = ["Our Story", "Contact Us", "Order History", "Shipping Policy", "Returns & Refunds", "Privacy Policy", "Terms & Conditions"];
+const contentPages = ["Our Story", "Contact Us", "Shipping Policy", "Returns & Refunds", "Privacy Policy", "Terms & Conditions", "Disclaimer"];
 const contentLabel = (slug) => contentPages.find((label) => contentSlug(label) === slug) || slug.split("-").map((word) => word[0]?.toUpperCase() + word.slice(1)).join(" ");
+
+const normalizeStoreData = (data = {}) => ({
+  products: Array.isArray(data.products) ? data.products : [],
+  categories: Array.isArray(data.categories) ? data.categories : [],
+  navigationCategories: Array.isArray(data.navigationCategories)
+    ? data.navigationCategories
+    : Array.isArray(data.categories) ? data.categories : [],
+  featuredCategoryIds: Array.isArray(data.featuredCategoryIds) ? data.featuredCategoryIds : [],
+  brands: Array.isArray(data.brands) ? data.brands : [],
+  coupons: Array.isArray(data.coupons) ? data.coupons : [],
+  announcements: Array.isArray(data.announcements) ? data.announcements : [],
+  blogs: Array.isArray(data.blogs) ? data.blogs : [],
+  reviews: Array.isArray(data.reviews) ? data.reviews : [],
+});
 
 function pageFromLocation() {
   const path = window.location.pathname.replace(/\/+$/, "") || "/";
   const segments = path.split("/").filter(Boolean);
+  if (segments[0] === "account" && segments[1] === "orders" && segments[2] && segments[3] === "invoice") return "order-invoice";
+  if (segments[0] === "account" && segments[1] === "orders" && segments[2]) return "order-details";
+  if (segments[0] === "pages" && segments[1] === "order-history") return "account";
   const routes = {
-    shop: "shop", wishlist: "wishlist", blog: "blog", info: "info",
+    shop: "shop", wishlist: "wishlist", blog: "blog", info: "content",
     pages: "content", checkout: "checkout", account: "account",
     "order-confirmation": "order-placed", product: "product",
   };
@@ -43,6 +60,8 @@ export default function App() {
   const [storeData, setStoreData] = useState({
     products: [],
     categories: [],
+    navigationCategories: [],
+    featuredCategoryIds: [],
     brands: [],
     coupons: [],
     announcements: [],
@@ -51,63 +70,145 @@ export default function App() {
   });
   const [page, setPage] = useState("home");
   const [cart, setCart] = useState([]);
+  const cartRef = useRef([]);
+  const [cartSessionId, setCartSessionId] = useState("");
+  const [cartReady, setCartReady] = useState(false);
   const [wishlist, setWishlist] = useState([]);
   const [cartOpen, setCartOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [sessionReady, setSessionReady] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [toast, setToast] = useState("");
   const [catalogView, setCatalogView] = useState("All Products");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [contentPage, setContentPage] = useState("Our Story");
+  const [accountStartTab, setAccountStartTab] = useState("overview");
   const [placedOrder, setPlacedOrder] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+
+  const updateCart = (updater) => {
+    const nextCart = typeof updater === "function" ? updater(cartRef.current) : updater;
+    cartRef.current = nextCart;
+    setCart(nextCart);
+    try {
+      localStorage.setItem("hwh_cart", JSON.stringify(nextCart));
+    } catch (error) {
+      console.warn("Could not save local cart:", error);
+    }
+  };
 
   useEffect(() => {
     try {
       const stored = localStorage.getItem("hwh_user");
-      if (stored) {
+      const token = localStorage.getItem("hwh_session_token");
+      localStorage.removeItem("hwh_wishlist");
+      if (stored && token) {
         setCurrentUser(JSON.parse(stored));
+      } else {
+        localStorage.removeItem("hwh_user");
+        localStorage.removeItem("hwh_session_token");
       }
     } catch (e) {
       console.warn("Could not load stored user session:", e);
+    } finally {
+      setSessionReady(true);
     }
   }, []);
 
+  useEffect(() => {
+    if (!sessionReady) return;
+    let active = true;
+    setWishlist([]);
+    if (currentUser) {
+      fetchUserWishlist()
+        .then((items) => { if (active) setWishlist(items); })
+        .catch((error) => {
+          if (!active) return;
+          if (error.status === 401 || /sign in|session|account is unavailable/i.test(error.message)) {
+            handleLogout();
+            return;
+          }
+          console.warn("Could not load account wishlist:", error);
+          notify(error.message || "Could not load your wishlist. Please try again.");
+        });
+    }
+    return () => { active = false; };
+  }, [sessionReady, currentUser?._id]);
+
   const handleAuthSuccess = (user) => {
+    setWishlist([]);
     setCurrentUser(user);
     try {
       if (user) {
-        localStorage.setItem("hwh_user", JSON.stringify(user));
+        if (user.sessionToken) localStorage.setItem("hwh_session_token", user.sessionToken);
+        const { sessionToken, ...safeUser } = user;
+        localStorage.setItem("hwh_user", JSON.stringify(safeUser));
       }
     } catch (e) {}
     notify(`Welcome back, ${user?.name || "Seeker"}!`);
   };
 
   const handleLogout = () => {
+    setWishlist([]);
     setCurrentUser(null);
     try {
       localStorage.removeItem("hwh_user");
+      localStorage.removeItem("hwh_session_token");
     } catch (e) {}
     notify("You have been signed out.");
   };
 
+  // A checkout URL can be opened directly, so enforce the same sign-in gate
+  // used by the cart's checkout button after the saved session is restored.
+  useEffect(() => {
+    if (sessionReady && page === "checkout" && !currentUser) {
+      setAuthModalOpen(true);
+    }
+  }, [sessionReady, page, currentUser]);
+
+  useEffect(() => {
+    if (!sessionReady || window.location.pathname !== "/pages/order-history") return;
+    setAccountStartTab("orders");
+    if (!currentUser) setAuthModalOpen(true);
+    window.history.replaceState({ page: "account" }, "", "/account");
+  }, [sessionReady, currentUser, page]);
+
+  const startCheckout = () => {
+    navigate("checkout");
+    if (!currentUser) setAuthModalOpen(true);
+  };
+
   useEffect(() => {
     let active = true;
+    let hasCachedCatalog = false;
+    try {
+      const cachedCatalog = JSON.parse(localStorage.getItem("hwh_store_init") || "null");
+      if (cachedCatalog && Array.isArray(cachedCatalog.products)) {
+        setStoreData(normalizeStoreData(cachedCatalog));
+        hasCachedCatalog = true;
+      }
+    } catch (error) {
+      console.warn("Could not restore cached store data:", error);
+    }
+
     fetchStoreInit()
       .then((data) => {
         if (!active || !data) return;
-        setStoreData({
-          products: Array.isArray(data.products) ? data.products : [],
-          categories: Array.isArray(data.categories) ? data.categories : [],
-          brands: Array.isArray(data.brands) ? data.brands : [],
-          coupons: Array.isArray(data.coupons) ? data.coupons : [],
-          announcements: Array.isArray(data.announcements) ? data.announcements : [],
-          blogs: Array.isArray(data.blogs) ? data.blogs : [],
-          reviews: Array.isArray(data.reviews) ? data.reviews : [],
-        });
+        const freshCatalog = normalizeStoreData(data);
+        setStoreData(freshCatalog);
+        try {
+          localStorage.setItem("hwh_store_init", JSON.stringify(freshCatalog));
+        } catch (error) {
+          console.warn("Could not cache store data:", error);
+        }
       })
       .catch((err) => {
-        console.error("Failed to load live store data:", err);
+        if (hasCachedCatalog) {
+          console.warn("Store API is unavailable; showing the last saved catalog:", err);
+        } else {
+          console.error("Failed to load live store data:", err);
+        }
       });
     return () => {
       active = false;
@@ -116,6 +217,7 @@ export default function App() {
 
   const products = storeData.products;
   const categories = storeData.categories;
+  const navigationCategories = storeData.navigationCategories;
   const brands = storeData.brands;
   const coupons = storeData.coupons;
   const blogs = storeData.blogs;
@@ -145,17 +247,7 @@ export default function App() {
     }
     if (segments[0] === "product" && segments[1]) setSelectedId(decodeURIComponent(segments[1]));
     const cartParam = params.get("cart");
-    if (cartParam) {
-      const ids = cartParam
-        .split(",")
-        .map(Number)
-        .filter((n) => !isNaN(n) && n > 0);
-      if (ids.length > 0) {
-        setCart(ids);
-        setCartOpen(true);
-        return;
-      }
-    }
+    if (cartParam) setCartOpen(true);
 
     const handlePop = () => {
       setPage(pageFromLocation());
@@ -167,46 +259,95 @@ export default function App() {
     };
     window.addEventListener("popstate", handlePop);
 
-    // Restore cart from MongoDB backend session
-    const sessionId = localStorage.getItem("hwh_cart_session");
-    if (sessionId) {
-      fetchCartFromBackend(sessionId)
-        .then((res) => {
-          if (res?.items && res.items.length > 0) {
-            const loadedIds = [];
-            res.items.forEach((item) => {
-              for (let i = 0; i < (item.quantity || 1); i++) {
-                loadedIds.push(item.id);
-              }
-            });
-            if (loadedIds.length > 0) {
-              setCart(loadedIds);
-            }
-          }
-        })
-        .catch(() => {});
-    }
-
     return () => {
       window.removeEventListener("popstate", handlePop);
     };
   }, []);
 
-  const navigate = (next) => {
+  useEffect(() => {
+    let active = true;
+    const normalizeIds = (values) => (Array.isArray(values) ? values : [])
+      .filter((id) => typeof id === "string" || typeof id === "number")
+      .map((id) => /^\d+$/.test(String(id)) ? Number(id) : String(id));
+    const sessionId = localStorage.getItem("hwh_cart_session") || `sess_${window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2, 14)}`;
+    localStorage.setItem("hwh_cart_session", sessionId);
+    setCartSessionId(sessionId);
+
+    const queryCart = new URLSearchParams(window.location.search).get("cart");
+    const queryIds = queryCart ? normalizeIds(queryCart.split(",")) : [];
+    const hasLocalCart = localStorage.getItem("hwh_cart") !== null;
+    let localIds = [];
+    try {
+      localIds = normalizeIds(JSON.parse(localStorage.getItem("hwh_cart") || "[]"));
+    } catch (error) {
+      console.warn("Could not restore local cart:", error);
+    }
+
+    const preferredIds = queryIds.length ? queryIds : hasLocalCart ? localIds : null;
+    if (preferredIds) {
+      cartRef.current = preferredIds;
+      setCart(preferredIds);
+    }
+
+    const restore = async () => {
+      try {
+        if (!preferredIds) {
+          const result = await fetchCartFromBackend(sessionId);
+          const restoredIds = [];
+          (result?.items || []).forEach((item) => {
+            const id = item.id;
+            for (let i = 0; i < (item.quantity || 1); i += 1) restoredIds.push(id);
+          });
+          if (active && cartRef.current.length === 0 && restoredIds.length > 0) {
+            cartRef.current = restoredIds;
+            setCart(restoredIds);
+          }
+        }
+      } catch (error) {
+        console.warn("Could not restore cart from database:", error);
+      } finally {
+        if (active) setCartReady(true);
+      }
+    };
+    restore();
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!cartReady || !cartSessionId) return;
+    const quantities = new Map();
+    cart.forEach((id) => {
+      const key = String(id);
+      const entry = quantities.get(key) || { id: /^\d+$/.test(key) ? Number(key) : key, quantity: 0 };
+      entry.quantity += 1;
+      quantities.set(key, entry);
+    });
+    const timeout = window.setTimeout(() => {
+      syncCartWithBackend({ sessionId: cartSessionId, items: [...quantities.values()] })
+        .catch((error) => console.warn("Background cart sync failed:", error.message));
+    }, 250);
+    return () => window.clearTimeout(timeout);
+  }, [cart, cartReady, cartSessionId]);
+
+  const navigate = (next, options = {}) => {
     if (next === "cart") {
       setCartOpen(true);
       return;
     }
     setPage(next);
+    if (next === "account") setAccountStartTab(options.tab || "overview");
     setCartOpen(false);
     if (typeof window !== "undefined") {
       try {
         const paths = {
           home: "/", shop: "/shop", wishlist: "/wishlist", blog: "/blog",
-          info: "/info", content: `/pages/${contentSlug(contentPage)}`,
+          info: `/pages/${contentSlug("Our Story")}`, content: `/pages/${contentSlug(contentPage)}`,
           checkout: "/checkout", "order-placed": "/order-confirmation", account: "/account",
         };
-        const url = new URL(paths[next] || `/${contentSlug(next)}`, window.location.origin);
+        const path = (next === "order-details" || next === "order-invoice") && options.orderId
+          ? `/account/orders/${encodeURIComponent(options.orderId)}${next === "order-invoice" ? "/invoice" : ""}`
+          : paths[next] || `/${contentSlug(next)}`;
+        const url = new URL(path, window.location.origin);
         window.history.pushState({ page: next }, "", url.toString());
       } catch (e) {}
     }
@@ -224,6 +365,10 @@ export default function App() {
     window.history.pushState({ page: "content", contentPage: next }, "", `/pages/${contentSlug(next)}`);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+  const openOrderHistory = () => {
+    navigate("account", { tab: "orders" });
+    if (!currentUser) setAuthModalOpen(true);
+  };
   const notify = (message) => {
     setToast(message);
     window.setTimeout(() => setToast(""), 2200);
@@ -234,22 +379,26 @@ export default function App() {
       notify("This product is already in your bag");
       return;
     }
-    setCart((current) => [...current, ...Array(quantity).fill(id)]);
+    updateCart((current) => [...current, ...Array(quantity).fill(id)]);
     notify(
       quantity > 1
         ? `${quantity} products added to your bag`
         : "Added to your bag",
     );
   };
-  const toggleWish = (id) => {
-    setWishlist((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id],
-    );
-    notify(
-      wishlist.includes(id) ? "Removed from wishlist" : "Saved to wishlist",
-    );
+  const toggleWish = async (id) => {
+    if (!currentUser) { setAuthModalOpen(true); return; }
+    const isSaved = wishlist.some((item) => String(item) === String(id));
+    try {
+      if (isSaved) await removeUserWishlistItem(id);
+      else await addUserWishlistItem(id);
+      setWishlist((current) => isSaved
+        ? current.filter((item) => String(item) !== String(id))
+        : [...current, id]);
+      notify(isSaved ? "Removed from wishlist" : "Saved to wishlist");
+    } catch (error) {
+      notify(error.message || "Could not update wishlist");
+    }
   };
   const openProduct = (id) => {
     setSelectedId(id);
@@ -270,7 +419,7 @@ export default function App() {
   };
   return (
     <div className="app-shell">
-      <Header
+      {page !== "checkout" && <Header
         cartCount={cart.length}
         wishlistCount={wishlist.length}
         navigate={navigate}
@@ -282,11 +431,12 @@ export default function App() {
         onLogout={handleLogout}
         onSearch={search}
         categories={categories}
+        navigationCategories={navigationCategories}
         brands={brands}
         coupons={coupons}
         announcements={storeData.announcements}
-      />
-      {page !== "home" && (
+      />}
+      {page !== "home" && page !== "checkout" && (
         <button
           type="button"
           className="floating-back"
@@ -299,6 +449,7 @@ export default function App() {
         <StoreHomePage
           navigate={navigate}
           openCatalog={openCatalog}
+          openContent={openContent}
           cart={cart}
           onAdd={addToCart}
           wished={wishlist}
@@ -306,6 +457,8 @@ export default function App() {
           openProduct={openProduct}
           products={products}
           categories={categories}
+          navigationCategories={navigationCategories}
+          featuredCategoryIds={storeData.featuredCategoryIds}
           brands={brands}
           coupons={coupons}
           blogs={blogs}
@@ -322,6 +475,7 @@ export default function App() {
           onWish={toggleWish}
           onAdd={addToCart}
           openProduct={openProduct}
+          openCatalog={openCatalog}
           products={products}
           categories={categories}
           brands={brands}
@@ -338,6 +492,7 @@ export default function App() {
           onWish={toggleWish}
           cart={cart}
           openProduct={openProduct}
+          openCatalog={openCatalog}
         />
       )}
       {page === "wishlist" && (
@@ -352,19 +507,20 @@ export default function App() {
         />
       )}
       {page === "blog" && <BlogPage openCatalog={openCatalog} blogs={blogs} />}
-      {page === "info" && <InfoPage />}
       {page === "content" && (
         <ContentPage page={contentPage} openCatalog={openCatalog} />
       )}
-      {page === "checkout" && (
+      {page === "checkout" && currentUser && (
         <CheckoutPage
+          navigate={navigate}
+          openContent={openContent}
           cart={cart}
           total={total}
           products={products}
           coupons={coupons}
           currentUser={currentUser}
           onComplete={(order) => {
-            setCart([]);
+            updateCart([]);
             setPlacedOrder(order);
             try {
               localStorage.setItem("hwh_last_order", JSON.stringify(order));
@@ -381,19 +537,37 @@ export default function App() {
           currentUser={currentUser}
         />
       )}
+      {page === "order-details" && (
+        <OrderPlacedPage
+          order={selectedOrder}
+          navigate={navigate}
+          currentUser={currentUser}
+          detailMode
+        />
+      )}
+      {page === "order-invoice" && (
+        <OrderInvoicePage order={selectedOrder} navigate={navigate} />
+      )}
       {page === "account" && (
         <AccountPage
           currentUser={currentUser}
+          initialTab={accountStartTab}
           onLogout={handleLogout}
           navigate={navigate}
           openAuthModal={() => setAuthModalOpen(true)}
           notify={notify}
+          onViewOrder={(order) => {
+            setSelectedOrder(order);
+            navigate("order-details", { orderId: order.orderNumber || order._id });
+          }}
         />
       )}
-      <Footer
+      {page !== "checkout" && <Footer
         navigate={navigate}
         openCatalog={openCatalog}
+        categories={navigationCategories}
         openContent={openContent}
+        openOrderHistory={openOrderHistory}
         openAuthModal={() => {
           if (currentUser) {
             navigate("account");
@@ -401,7 +575,7 @@ export default function App() {
             setAuthModalOpen(true);
           }
         }}
-      />
+      />}
 
       <AuthModal
         isOpen={authModalOpen}
@@ -416,20 +590,20 @@ export default function App() {
           coupons={coupons}
           close={() => setCartOpen(false)}
           remove={(id) =>
-            setCart((current) => current.filter((item) => item !== id))
+            updateCart((current) => current.filter((item) => String(item) !== String(id)))
           }
           changeQuantity={(id, change) =>
-            setCart((current) => {
+            updateCart((current) => {
               if (change > 0) return [...current, id];
-              const index = current.lastIndexOf(id);
+              const index = current.findLastIndex((item) => String(item) === String(id));
               return index === -1
                 ? current
                 : current.filter((_, itemIndex) => itemIndex !== index);
             })
           }
-          checkout={() => navigate("checkout")}
+          checkout={startCheckout}
           onAdd={(id) => {
-            setCart((current) => [...current, id]);
+            updateCart((current) => [...current, id]);
             notify("Item added to cart");
           }}
           notify={notify}

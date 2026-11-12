@@ -5,8 +5,11 @@ const { z } = require("zod");
 const Product = require("../models/Product");
 const Order = require("../models/Order");
 const OrderItem = require("../models/OrderItem");
+const Payment = require("../models/Payment");
+const InventoryLog = require("../models/InventoryLog");
 const { rateLimit } = require("express-rate-limit");
 const asyncHandler = require("../middleware/asyncHandler");
+const { isCouponExpired } = require("../utils/couponExpiry");
 
 const router = express.Router();
 const orderCreateLimit = rateLimit({
@@ -23,6 +26,7 @@ const createOrderSchema = z.object({
     phone: z.string().trim().optional(),
     street: z.string().trim().min(3).max(180),
     city: z.string().trim().min(1).max(100),
+    state: z.string().trim().max(100).optional().default(""),
     postalCode: z.string().trim().min(2).max(20),
     country: z.string().trim().min(2).max(80),
   }),
@@ -85,6 +89,7 @@ router.post(
         legacyId: product.legacyId,
         title: product.title,
         brand: product.brand,
+        image: product.image || product.images?.[0] || "",
         quantity,
         unitPrice: product.price,
         lineTotal: Number((product.price * quantity).toFixed(2)),
@@ -108,9 +113,7 @@ router.post(
         const meetsMin =
           !couponRecord.minOrderAmount ||
           subtotal >= couponRecord.minOrderAmount;
-        const notExpired =
-          !couponRecord.expiresAt ||
-          new Date(couponRecord.expiresAt) > new Date();
+        const notExpired = !isCouponExpired(couponRecord.expiresAt);
         if (meetsMin && notExpired) {
           couponCode = couponRecord.code;
           if (couponRecord.discountType === "percent") {
@@ -181,6 +184,36 @@ router.post(
       status: "placed",
     });
 
+    // Deduct stock quantity in the database and create inventory audit logs
+    const stockUpdates = items.map(async (item) => {
+      const prod = byId.get(item.legacyId);
+      const before = prod ? (prod.stockQty ?? 0) : 0;
+      const after = Math.max(0, before - item.quantity);
+
+      await Product.updateOne(
+        { _id: item.product },
+        [
+          {
+            $set: {
+              stockQty: {
+                $max: [0, { $subtract: ["$stockQty", item.quantity] }],
+              },
+            },
+          },
+        ],
+      );
+
+      await InventoryLog.create({
+        productId: item.product,
+        orderId: order._id,
+        type: "sale",
+        quantityChange: -item.quantity,
+        stockBefore: before,
+        stockAfter: after,
+        reason: `Order ${order.orderNumber} placed`,
+      });
+    });
+
     await Promise.all([
       OrderItem.insertMany(
         items.map((item) => ({
@@ -200,6 +233,7 @@ router.post(
         currency: order.currency,
         status: "pending",
       }),
+      ...stockUpdates,
     ]);
     res.status(201).json({
       order: {
@@ -208,6 +242,7 @@ router.post(
         currency: order.currency,
         subtotal: order.subtotal,
         shipping: order.shipping,
+        shippingFee: order.shippingFee,
         discount: order.discount,
         couponCode: order.couponCode,
         total: order.total,
@@ -238,7 +273,9 @@ router.get(
       ? { $or: [{ _id: identifier }, { orderNumber: identifier }] }
       : { orderNumber: identifier };
 
-    const order = await Order.findOne(query).lean();
+    const order = await Order.findOne(query)
+      .populate("items.product", "image images legacyId")
+      .lean();
     if (!order) {
       return res.status(404).json({ error: "Order not found." });
     }
@@ -252,14 +289,17 @@ router.get(
         currency: order.currency,
         subtotal: order.subtotal,
         shipping: order.shipping,
+        shippingFee: order.shippingFee,
         discount: order.discount,
         couponCode: order.couponCode,
         total: order.total,
         orderNote: order.orderNote,
         customer: order.customer,
         shippingAddress: order.shippingAddress,
+        billingAddress: order.billingAddress,
         items: order.items,
         paymentMethod: order.paymentMethod,
+        trackingId: order.trackingId,
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,
       },

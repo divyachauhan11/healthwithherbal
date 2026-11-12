@@ -9,7 +9,7 @@ const config = require("../config");
  * Send an email using Brevo's Transactional Email API.
  * In development or when BREVO_API_KEY is not set, falls back to logging the email to console.
  */
-async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, textContent }) {
+async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, textContent, replyTo }) {
   const apiKey = (config.brevoApiKey || "").trim();
   const senderEmail = (config.brevoSenderEmail || "support@healthwithherbal.com").trim();
   const senderName = (config.brevoSenderName || "Health with Herbal").trim();
@@ -44,6 +44,13 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, textConte
       subject,
       htmlContent,
     };
+
+    if (replyTo?.email) {
+      payload.replyTo = {
+        email: replyTo.email,
+        ...(replyTo.name ? { name: replyTo.name } : {}),
+      };
+    }
 
     if (textContent) {
       payload.textContent = textContent;

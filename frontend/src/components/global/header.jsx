@@ -24,6 +24,7 @@ export function Header({
   onLogout,
   onSearch,
   categories = [],
+  navigationCategories: navigationCategoriesProp = [],
   brands: brandsProp = [],
   announcements = [],
 }) {
@@ -38,11 +39,49 @@ export function Header({
         .map((b) => (typeof b === "string" ? b : b?.name || ""))
         .filter(Boolean)
     : [];
-  const activeCategories = categories
+  const activeCategories = (navigationCategoriesProp.length ? navigationCategoriesProp : categories)
     .map((category) =>
       typeof category === "string" ? { name: category, type: "form" } : category,
     )
     .filter((category) => category?.name);
+  const parentCategoryIds = new Set(
+    activeCategories.filter((category) => category.isParent).map((category) => String(category._id)),
+  );
+  const categoryGroups = [
+    ...activeCategories
+      .filter((category) => category.isParent)
+      .map((parent) => ({
+        key: String(parent._id || parent.name),
+        name: parent.name,
+        categories: activeCategories.filter(
+          (category) => !category.isParent && String(category.parentId) === String(parent._id),
+        ),
+      })),
+    ...(activeCategories.some(
+      (category) => !category.isParent && (!category.parentId || !parentCategoryIds.has(String(category.parentId))),
+    )
+      ? [{
+          key: "other-categories",
+          name: "More categories",
+          categories: activeCategories.filter(
+            (category) => !category.isParent && (!category.parentId || !parentCategoryIds.has(String(category.parentId))),
+          ),
+        }]
+      : []),
+  ].filter((group) => group.categories.length > 0);
+  const categoryColumns = Array.from({ length: 4 }, () => []);
+  const categoryColumnHeights = [0, 0, 0, 0];
+  categoryGroups.forEach((group) => {
+    const shortestColumn = categoryColumnHeights.indexOf(Math.min(...categoryColumnHeights));
+    categoryColumns[shortestColumn].push(group);
+    categoryColumnHeights[shortestColumn] += group.categories.length + 2;
+  });
+  const selectCategory = (categoryName) => {
+    openCatalog("All Products", categoryName);
+    setActiveMegaMenu("");
+    setMobile(false);
+    setMobileExpandedMenu("");
+  };
   const submitSearch = (event) => {
     event.preventDefault();
     onSearch(query);
@@ -193,10 +232,7 @@ export function Header({
                 className="nav-dropdown-trigger"
                 aria-expanded={activeMegaMenu === "category"}
                 onFocus={() => setActiveMegaMenu("category")}
-                onClick={() => {
-                  openCatalog("All Products");
-                  setActiveMegaMenu("");
-                }}
+                onClick={() => setActiveMegaMenu("category")}
               >
                 <span>Category</span>
                 <ChevronDown size={13} className="dropdown-chevron" />
@@ -241,9 +277,9 @@ export function Header({
                 <div className="header-mega-menu-heading">
                   <span>{activeMegaMenu === "brand" ? "Shop by brand" : "Shop by category"}</span>
                 </div>
-                <div className="header-mega-link-list">
-                  {activeMegaMenu === "brand"
-                    ? activeBrands.map((brand) => (
+                {activeMegaMenu === "brand" ? (
+                  <div className="header-mega-link-list">
+                    {activeBrands.map((brand) => (
                         <button
                           type="button"
                           key={brand}
@@ -255,21 +291,34 @@ export function Header({
                         >
                           {brand}
                         </button>
-                      ))
-                    : activeCategories.map((category) => (
-                      <button
-                        type="button"
-                        key={category._id || category.name}
-                        onMouseEnter={() => setActiveMegaMenu("category")}
-                        onClick={() => {
-                          openCatalog("All Products", category.name);
-                          setActiveMegaMenu("");
-                        }}
-                      >
-                        {category.name}
-                      </button>
                     ))}
-                </div>
+                  </div>
+                ) : categoryGroups.length ? (
+                  <div className="header-category-mega-grid">
+                    {categoryColumns.map((column, columnIndex) => (
+                      <div className="header-category-column" key={`category-column-${columnIndex}`}>
+                        {column.map((group) => (
+                          <section className="header-category-group" key={group.key}>
+                            <h3>{group.name}</h3>
+                            <ul>
+                              {group.categories.map((category) => (
+                                <li key={category._id || category.name}>
+                                  <button
+                                    type="button"
+                                    onMouseEnter={() => setActiveMegaMenu("category")}
+                                    onClick={() => selectCategory(category.name)}
+                                  >
+                                    {category.name}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          </section>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="header-mega-empty">No categories available.</p>}
               </div>
             )}
           </div>
@@ -318,19 +367,20 @@ export function Header({
                 <ChevronDown size={18} />
               </button>
               {mobileExpandedMenu === "category" && (
-                <div className="mobile-brands-subgrid">
-                  {activeCategories.map((category) => (
-                    <button
-                      type="button"
-                      key={category._id || category.name}
-                      className="mobile-brand-pill"
-                      onClick={() => {
-                        openCatalog("All Products", category.name);
-                        setMobile(false);
-                      }}
-                    >
-                      {category.name}
-                    </button>
+                <div className="mobile-category-groups">
+                  {categoryGroups.map((group) => (
+                    <section className="mobile-category-group" key={group.key}>
+                      <h3>{group.name}</h3>
+                      {group.categories.map((category) => (
+                        <button
+                          type="button"
+                          key={category._id || category.name}
+                          onClick={() => selectCategory(category.name)}
+                        >
+                          {category.name}
+                        </button>
+                      ))}
+                    </section>
                   ))}
                 </div>
               )}

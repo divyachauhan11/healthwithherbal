@@ -205,6 +205,7 @@ export function ImageUploadField({
 }
 
 export function ProductForm({ initial, brands, categories, onSave, onClose, busy }) {
+  const productCategories = (categories || []).filter((category) => !category?.isParent);
   const [form, setForm] = useState(() => ({
     title: initial?.title || "",
     sku: initial?.sku || "",
@@ -278,13 +279,13 @@ export function ProductForm({ initial, brands, categories, onSave, onClose, busy
             Category
             <select required value={form.category} onChange={update("category")}>
               <option value="">Choose category</option>
-              {categories.map((category) => (
+              {productCategories.map((category) => (
                 <option key={category._id} value={category.name}>
                   {category.name}
                 </option>
               ))}
               {form.category &&
-                !categories.some((category) => category.name === form.category) && (
+                !productCategories.some((category) => category.name === form.category) && (
                   <option>{form.category}</option>
                 )}
             </select>

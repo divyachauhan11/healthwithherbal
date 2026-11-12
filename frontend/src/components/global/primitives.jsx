@@ -34,13 +34,14 @@ export function SectionHeading({ eyebrow, title, copy, centered }) {
       {copy && <p>{copy}</p>}
     </div>);
 }
-export function ProductCard({ product, wished, added, onWish, onAdd, onOpen, }) {
+export function ProductCard({ product, wished, added, onWish, onAdd, onOpen, onSimilar }) {
     const badges = (product.badge || "")
       .split(",")
       .map((b) => b.trim())
       .filter(Boolean);
+    const isOutOfStock = product.stockQty !== undefined && product.stockQty !== null && Number(product.stockQty) <= 0;
 
-    return (<article className="product-card">
+    return (<article className={`product-card${isOutOfStock ? " is-out-of-stock" : ""}`}>
       <div className="product-image-wrap">
         {badges.length > 0 && (
           <div className="product-badge-group" style={{ position: "absolute", top: "10px", left: "10px", display: "flex", flexDirection: "column", gap: "4px", zIndex: 2, alignItems: "flex-start" }}>
@@ -53,8 +54,13 @@ export function ProductCard({ product, wished, added, onWish, onAdd, onOpen, }) 
           <Heart size={18} fill={wished ? "currentColor" : "none"}/>
         </button>
         <button type="button" className="image-button" onClick={onOpen}>
-          <img src={product.image} alt={product.title}/>
+          {product.image ? (
+            <img src={product.image} alt={product.title} />
+          ) : (
+            <span className="product-image-placeholder" aria-hidden="true" />
+          )}
         </button>
+        {isOutOfStock && <span className="out-of-stock-label"><ShoppingBag size={15} /> Out of stock</span>}
       </div>
       <div className="product-copy">
         <div className="product-meta">
@@ -70,10 +76,16 @@ export function ProductCard({ product, wished, added, onWish, onAdd, onOpen, }) 
             <strong>₹{product.price.toFixed(2)}</strong>
             <del>₹{product.original.toFixed(2)}</del>
           </div>
-          <button type="button" className={`quick-add ${added ? "added" : ""}`} onClick={onAdd} aria-label={added ? "Already in bag" : "Add to bag"}>
-            {added ? <Check size={16}/> : <ShoppingBag size={17}/>}
-            {added && <span>In bag</span>}
-          </button>
+          {isOutOfStock ? (
+            <button type="button" className="view-similar-button" onClick={onSimilar}>
+              View similar
+            </button>
+          ) : (
+            <button type="button" className={`quick-add ${added ? "added" : ""}`} onClick={onAdd} aria-label={added ? "Already in bag" : "Add to bag"}>
+              {added ? <Check size={16}/> : <ShoppingBag size={17}/>}
+              {added && <span>In bag</span>}
+            </button>
+          )}
         </div>
       </div>
     </article>);

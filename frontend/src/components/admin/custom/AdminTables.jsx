@@ -13,10 +13,31 @@ import {
 import { adminRequest } from "../../../lib/admin-api";
 import { classStatus, currency, dateLabel } from "../global/admin-utils";
 import { DataTable } from "../global/DataTable";
+import { Modal } from "../global/Modal";
 import { TablePagination, useTablePagination } from "../global/TablePagination";
 import { DeleteConfirmationModal } from "../global/DeleteConfirmationModal";
 
 export { TablePagination, useTablePagination };
+
+const STORE_TIME_ZONE = process.env.NEXT_PUBLIC_STORE_TIME_ZONE || "Asia/Kolkata";
+
+const storeCalendarDate = (date) => {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: STORE_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
+
+const isCouponExpired = (expiresAt) => {
+  if (!expiresAt) return false;
+  const expiryDate = new Date(expiresAt);
+  if (Number.isNaN(expiryDate.getTime())) return false;
+  return expiryDate.toISOString().slice(0, 10) < storeCalendarDate(new Date());
+};
 
 export function RowActionsMenu({
   onEdit,
@@ -357,8 +378,8 @@ export function OrderTable({
     <DataTable
       columns={columns}
       data={rows}
-      pageSize={compact ? 5 : initialPageSize}
-      pageSizeOptions={compact ? [5, 10, 20] : [10, 25, 50]}
+      pageSize={initialPageSize}
+      pageSizeOptions={compact ? [7, 10, 20] : [10, 25, 50]}
       emptyMessage="No orders found yet."
     />
   );
@@ -539,12 +560,20 @@ export function ProductTable({
 export function CollectionTable({
   kind,
   rows = [],
+  categoryView = "categories",
+  categoryRows = rows,
   onEdit,
   onDelete,
   onNavigate,
   pageSize: initialPageSize = 10,
 }) {
+  const [viewedParentCategory, setViewedParentCategory] = useState(null);
   const isCategory = kind === "Categories";
+  const isParentCategoryView = isCategory && categoryView === "parents";
+  const viewedSubcategories = viewedParentCategory
+    ? categoryRows.filter((category) => String(category.parentId) === String(viewedParentCategory._id))
+    : [];
+  const viewedProductCount = viewedSubcategories.reduce((total, category) => total + Number(category.productCount || 0), 0);
 
   const columns = useMemo(
     () => [
@@ -571,7 +600,20 @@ export function CollectionTable({
               <div className="product-thumb">{item.name?.slice(0, 1)}</div>
             ) : null}
             <div>
-              <b>{item.name}</b>
+              {isCategory ? (
+                <button
+                  type="button"
+                  className="category-name-link"
+                  title={item.isParent ? `View categories under ${item.name}` : `View products in ${item.name}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    if (item.isParent) setViewedParentCategory(item);
+                    else onNavigate?.("Products", item.name);
+                  }}
+                >
+                  {item.name}
+                </button>
+              ) : <b>{item.name}</b>}
               {item.images?.length > 1 && (
                 <small
                   className="cell-subtitle"
@@ -599,6 +641,7 @@ export function CollectionTable({
               label: "Type / Section",
               sortable: true,
               render: (item) => {
+                if (item.isParent) return <span className="category-parent-badge">Parent category</span>;
                 const isConcern = item.type === "concern";
                 return (
                   <span
@@ -621,6 +664,33 @@ export function CollectionTable({
                 );
               },
             },
+            {
+              key: isParentCategoryView ? "categoryCount" : "parentId",
+              label: isParentCategoryView ? "Category count" : "Parent category",
+              sortable: true,
+              sortFn: isParentCategoryView
+                ? (a, b) => categoryRows.filter((category) => String(category.parentId) === String(a._id)).length - categoryRows.filter((category) => String(category.parentId) === String(b._id)).length
+                : undefined,
+              render: (item) => {
+                if (!isParentCategoryView) return item.isParent ? "—" : (item.parentName || "—");
+                const count = categoryRows.filter((category) => String(category.parentId) === String(item._id)).length;
+                return (
+                  <button
+                    type="button"
+                    className="category-count-action"
+                    title={`View ${count} ${count === 1 ? "category" : "categories"} under ${item.name}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setViewedParentCategory(item);
+                    }}
+                  >
+                    <span className={`category-count-badge ${count ? "has-items" : "empty"}`}>
+                      <b>{count}</b> <small>{count === 1 ? "category" : "categories"}</small>
+                    </span>
+                  </button>
+                );
+              },
+            },
           ]
         : []),
       {
@@ -631,24 +701,32 @@ export function CollectionTable({
           (a.productCount ?? a.count ?? 0) - (b.productCount ?? b.count ?? 0),
         render: (item) => {
           const count = item.productCount ?? item.count ?? 0;
-          return (
-            <span
-              className={`category-count-badge ${count > 0 ? "has-items" : "empty"} ${onNavigate && count > 0 ? "interactive" : ""}`}
-              style={onNavigate && count > 0 ? { cursor: "pointer" } : undefined}
-              title={
-                count > 0 && onNavigate
-                  ? `Click to view ${count} product${count > 1 ? "s" : ""} for ${item.name}`
-                  : undefined
-              }
-              onClick={() => {
-                if (count > 0 && onNavigate) {
+          const canNavigateToProducts = Boolean(onNavigate && count > 0 && (!item.isParent || isParentCategoryView));
+          const badge = (
+            <span className={`category-count-badge ${count > 0 ? "has-items" : "empty"}`}>
+              <b>{count}</b> <small>{count === 1 ? "item" : "items"}</small>
+            </span>
+          );
+          return canNavigateToProducts ? (
+            <button
+              type="button"
+              className="category-count-action"
+              title={`View ${count} product${count > 1 ? "s" : ""} for ${item.name}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                if (item.isParent) {
+                  onNavigate("Products", {
+                    parentCategoryId: String(item._id),
+                    parentCategoryName: item.name,
+                  });
+                } else {
                   onNavigate("Products", item.name);
                 }
               }}
             >
-              <b>{count}</b> <small>{count === 1 ? "item" : "items"}</small>
-            </span>
-          );
+              {badge}
+            </button>
+          ) : badge;
         },
       },
       {
@@ -669,22 +747,70 @@ export function CollectionTable({
           <RowActionsMenu
             onEdit={() => onEdit(item)}
             onDelete={() => onDelete(item)}
+            extraActions={isParentCategoryView ? [{ label: "View", icon: Eye, onClick: () => setViewedParentCategory(item) }] : []}
             editLabel="Edit"
             deleteLabel="Delete"
           />
         ),
       },
     ],
-    [kind, isCategory, onEdit, onDelete, onNavigate],
+    [kind, isCategory, isParentCategoryView, categoryRows, onEdit, onDelete, onNavigate],
   );
 
   return (
-    <DataTable
-      columns={columns}
-      data={rows}
-      pageSize={initialPageSize}
-      emptyMessage={`No ${kind.toLowerCase()} found.`}
-    />
+    <>
+      <DataTable
+        columns={columns}
+        data={rows}
+        pageSize={initialPageSize}
+        emptyMessage={`No ${kind.toLowerCase()} found.`}
+      />
+      <Modal
+        isOpen={Boolean(viewedParentCategory)}
+        onClose={() => setViewedParentCategory(null)}
+        title={viewedParentCategory?.name || "Parent category details"}
+        subtitle="Parent category information and all categories grouped under it."
+        showFooter={false}
+        maxWidth="780px"
+        className="category-details-modal"
+      >
+        {viewedParentCategory && (
+          <div className="category-details-content">
+            <div className="category-details-overview">
+              <div><span>URL slug</span><strong>/{viewedParentCategory.slug || "—"}</strong></div>
+              <div><span>Status</span><strong>{viewedParentCategory.isActive === false ? "Inactive" : "Active"}</strong></div>
+              <div><span>Categories</span><strong>{viewedSubcategories.length}</strong></div>
+              <div><span>Products</span><strong>{viewedProductCount}</strong></div>
+              <div><span>Created</span><strong>{viewedParentCategory.createdAt ? dateLabel(viewedParentCategory.createdAt) : "—"}</strong></div>
+              <div><span>Last updated</span><strong>{viewedParentCategory.updatedAt ? dateLabel(viewedParentCategory.updatedAt) : "—"}</strong></div>
+            </div>
+
+            <section className="category-details-list" aria-label="Categories in this parent category">
+              <div className="category-details-list-heading">
+                <div><span>Grouped categories</span><h3>Categories under {viewedParentCategory.name}</h3></div>
+                <span className="category-details-total">{viewedSubcategories.length} total</span>
+              </div>
+              {viewedSubcategories.length ? viewedSubcategories.map((category) => (
+                <article className="category-detail-row" key={category._id}>
+                  <div className="category-detail-main">
+                    <strong>{category.name}</strong>
+                    <span>/{category.slug}</span>
+                    {category.description && <small>{category.description}</small>}
+                  </div>
+                  <span className="category-detail-type">{category.type === "concern" ? "Health concern" : "Product form"}</span>
+                  <span className={`category-detail-status${category.isActive === false ? " inactive" : ""}`}>
+                    {category.isActive === false ? "Inactive" : "Active"}
+                  </span>
+                  <span className="category-detail-products">{category.productCount || 0} products</span>
+                </article>
+              )) : (
+                <div className="category-details-empty">No categories have been assigned to this parent yet.</div>
+              )}
+            </section>
+          </div>
+        )}
+      </Modal>
+    </>
   );
 }
 
@@ -739,11 +865,19 @@ export function CouponTable({
         key: "isActive",
         label: "Status",
         sortable: true,
-        render: (coupon) => (
-          <span className={`status ${coupon.isActive ? "" : "paused"}`}>
-            {coupon.isActive ? "Active" : "Paused"}
-          </span>
-        ),
+        render: (coupon) => {
+          const expired = isCouponExpired(coupon.expiresAt);
+          const status = expired
+            ? "Expired"
+            : coupon.isActive
+              ? "Active"
+              : "Paused";
+          return (
+            <span className={`status ${expired || !coupon.isActive ? "paused" : ""}`}>
+              {status}
+            </span>
+          );
+        },
       },
       {
         key: "actions",
@@ -1081,7 +1215,7 @@ export function BlogTable({
   );
 }
 
-export function UserTable({ rows = [], pageSize: initialPageSize = 10 }) {
+export function UserTable({ rows = [], pageSize: initialPageSize = 10, onEdit, onDelete }) {
   const columns = useMemo(
     () => [
       {
@@ -1118,21 +1252,26 @@ export function UserTable({ rows = [], pageSize: initialPageSize = 10 }) {
         sortable: true,
         render: (person) => dateLabel(person.createdAt),
       },
+      {
+        key: "actions",
+        label: "Action",
+        render: (person) => (
+          <RowActionsMenu
+            onEdit={onEdit ? () => onEdit(person) : undefined}
+            onDelete={onDelete ? () => onDelete(person) : undefined}
+          />
+        ),
+      },
     ],
-    [],
-  );
-
-  const adminOnlyRows = useMemo(
-    () => rows.filter((person) => person.role === "admin"),
-    [rows],
+    [onEdit, onDelete],
   );
 
   return (
     <DataTable
       columns={columns}
-      data={adminOnlyRows}
+      data={rows}
       pageSize={initialPageSize}
-      emptyMessage="No administrator accounts found."
+      emptyMessage="No admin or employee accounts found."
     />
   );
 }

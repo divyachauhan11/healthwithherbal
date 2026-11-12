@@ -1,7 +1,10 @@
 "use client";
 import { LOGO_URL } from "../../lib/store-data";
 import { InstagramIcon, FacebookIcon } from "./icons";
-export function Footer({ navigate, openCatalog, openContent, openAuthModal }) {
+export function Footer({ navigate, openCatalog, openContent, openOrderHistory, openAuthModal, categories = [] }) {
+  const shopCategories = categories.filter(
+    (category) => category && (category.isParent || category.parentId == null),
+  );
   return (
     <footer>
       <div className="page-width footer-grid">
@@ -48,24 +51,26 @@ export function Footer({ navigate, openCatalog, openContent, openAuthModal }) {
         </div>
         <div>
           <h4>Shop</h4>
-          {[
-            "Ayurvedic Care",
-            "Herbal Care",
-            "Health & Beauty",
-            "OTC Medicines",
-            "All Products",
-          ].map((item) => (
-            <button type="button" key={item} onClick={() => openCatalog(item)}>
-              {item === "All Products" ? "Shop All" : item}
-            </button>
-          ))}
+          <div className="footer-category-links">
+            {shopCategories.map((category) => (
+              <button
+                type="button"
+                key={category._id || category.id || category.slug || category.name}
+                onClick={() => openCatalog(category.name)}
+                title={category.name}
+              >
+                {category.name}
+              </button>
+            ))}
+            <button type="button" onClick={() => openCatalog("All Products")}>Shop All</button>
+          </div>
         </div>
         <div>
           <h4>Customer care</h4>
           <button type="button" onClick={openAuthModal}>
             My Account
           </button>
-          <button type="button" onClick={() => openContent("Order History")}>
+          <button type="button" onClick={openOrderHistory}>
             Order History
           </button>
           <button type="button" onClick={() => navigate("wishlist")}>

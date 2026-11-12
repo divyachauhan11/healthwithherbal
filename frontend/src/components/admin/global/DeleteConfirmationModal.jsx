@@ -223,7 +223,9 @@ export function DeleteConfirmationModal({
               <>
                 Are you sure you want to permanently delete this{" "}
                 <strong>{kindSingular.toLowerCase()}</strong>? This action is
-                irreversible and will remove all related data from your live catalog.
+                irreversible{kind === "users"
+                  ? " and will remove this user's admin portal account."
+                  : " and will remove all related data from your live catalog."}
               </>
             )}
           </p>

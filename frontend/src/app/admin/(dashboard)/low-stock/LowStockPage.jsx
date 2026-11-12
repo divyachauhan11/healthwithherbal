@@ -21,6 +21,14 @@ import { SearchField, Empty, currency, ProductModal } from "../../../../componen
 import { RowActionsMenu, TablePagination, useTablePagination } from "../../../../components/admin/custom";
 import { adminRequest } from "../../../../lib/admin-api";
 
+function getStockCategory(product) {
+  const quantity = product.stockQty ?? 0;
+  if (quantity === 0) return "out";
+  if (quantity >= 1 && quantity <= 4) return "critical";
+  if (quantity >= 5 && quantity < 10) return "warning";
+  return "healthy";
+}
+
 export default function LowStockPage({
   rows = [],
   query = "",
@@ -54,20 +62,22 @@ export default function LowStockPage({
 
   // Metric counts
   const outOfStockCount = useMemo(
-    () => lowStockItems.filter((p) => (p.stockQty ?? 0) === 0).length,
+    () =>
+      lowStockItems.filter((product) => getStockCategory(product) === "out")
+        .length,
     [lowStockItems]
   );
   const criticalCount = useMemo(
     () =>
       lowStockItems.filter(
-        (p) => (p.stockQty ?? 0) >= 1 && (p.stockQty ?? 0) <= 4
+        (product) => getStockCategory(product) === "critical"
       ).length,
     [lowStockItems]
   );
   const warningCount = useMemo(
     () =>
       lowStockItems.filter(
-        (p) => (p.stockQty ?? 0) >= 5 && (p.stockQty ?? 0) < 10
+        (product) => getStockCategory(product) === "warning"
       ).length,
     [lowStockItems]
   );
@@ -75,16 +85,8 @@ export default function LowStockPage({
   // Filtered rows by tab and search
   const displayedItems = useMemo(() => {
     let list = lowStockItems;
-    if (stockFilter === "out") {
-      list = list.filter((p) => (p.stockQty ?? 0) === 0);
-    } else if (stockFilter === "critical") {
-      list = list.filter(
-        (p) => (p.stockQty ?? 0) >= 1 && (p.stockQty ?? 0) <= 4
-      );
-    } else if (stockFilter === "warning") {
-      list = list.filter(
-        (p) => (p.stockQty ?? 0) >= 5 && (p.stockQty ?? 0) < 10
-      );
+    if (stockFilter !== "all") {
+      list = list.filter((product) => getStockCategory(product) === stockFilter);
     }
     const needle = query.trim().toLowerCase();
     if (!needle) return list;
@@ -99,6 +101,28 @@ export default function LowStockPage({
 
   const pagination = useTablePagination(displayedItems, 10);
 
+  const updateStockQuantity = async ({
+    productId,
+    quantity,
+    reason,
+    onSuccess,
+  }) => {
+    setRestockingId(productId);
+    try {
+      await adminRequest(`/products/${productId}/stock`, {
+        method: "PATCH",
+        token,
+        body: { stockQty: quantity, reason },
+      });
+      onSuccess?.();
+      if (onRefresh) onRefresh();
+    } catch (err) {
+      alert(err.message || "Failed to update stock");
+    } finally {
+      setRestockingId(null);
+    }
+  };
+
   // Handle Quick Restock action
   const handleQuickRestock = async (productId, addAmount) => {
     const product = lowStockItems.find((p) => p._id === productId);
@@ -106,19 +130,11 @@ export default function LowStockPage({
     const currentQty = product.stockQty ?? 0;
     const newQty = currentQty + addAmount;
 
-    setRestockingId(productId);
-    try {
-      await adminRequest(`/products/${productId}/stock`, {
-        method: "PATCH",
-        token,
-        body: { stockQty: newQty, reason: `Quick restock (+${addAmount})` },
-      });
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      alert(err.message || "Failed to update stock");
-    } finally {
-      setRestockingId(null);
-    }
+    await updateStockQuantity({
+      productId,
+      quantity: newQty,
+      reason: `Quick restock (+${addAmount})`,
+    });
   };
 
   // Handle Custom Stock Input submission
@@ -128,20 +144,13 @@ export default function LowStockPage({
       alert("Please enter a valid stock quantity (0 or greater).");
       return;
     }
-    setRestockingId(productId);
-    try {
-      await adminRequest(`/products/${productId}/stock`, {
-        method: "PATCH",
-        token,
-        body: { stockQty: val, reason: "Manual stock adjustment" },
-      });
-      setCustomStockInputs((prev) => ({ ...prev, [productId]: "" }));
-      if (onRefresh) onRefresh();
-    } catch (err) {
-      alert(err.message || "Failed to update stock");
-    } finally {
-      setRestockingId(null);
-    }
+    await updateStockQuantity({
+      productId,
+      quantity: val,
+      reason: "Manual stock adjustment",
+      onSuccess: () =>
+        setCustomStockInputs((prev) => ({ ...prev, [productId]: "" })),
+    });
   };
 
   return (

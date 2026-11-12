@@ -15,8 +15,9 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
     phone: { type: String, trim: true, index: true },
-    role: { type: String, enum: ["customer", "admin"], default: "customer" },
+    role: { type: String, enum: ["customer", "admin", "employee"], default: "customer" },
     isActive: { type: Boolean, default: true },
+    pageAccess: { type: [String], default: [] },
   },
   {
     timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },

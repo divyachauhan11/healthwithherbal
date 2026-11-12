@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Check, AlertCircle } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { adminRequest } from "../../lib/admin-api";
 import {
   Login,
@@ -95,6 +95,7 @@ export default function AdminPortal() {
       return "";
     }
   });
+  const [productCategoryScope, setProductCategoryScope] = useState(null);
   const [data, setData] = useState({});
   const [catalog, setCatalog] = useState({ brands: [], categories: [] });
   const [loading, setLoading] = useState(false);
@@ -102,6 +103,7 @@ export default function AdminPortal() {
   const [form, setForm] = useState(null);
   const [loginError, setLoginError] = useState("");
   const [toast, setToast] = useState(null);
+  const [addingUser, setAddingUser] = useState(false);
   const [deleteModal, setDeleteModal] = useState({
     isOpen: false,
     kind: "",
@@ -125,6 +127,41 @@ export default function AdminPortal() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!token) return;
+    let active = true;
+    const refreshStaffAccess = async () => {
+      try {
+        const result = await adminRequest("/auth/session", { token });
+        if (!active || !result.user) return;
+        setUser(result.user);
+        window.localStorage.setItem("hwh-admin-user", JSON.stringify(result.user));
+      } catch (error) {
+        if (!active) return;
+        if (/no longer active|session has expired|session is invalid/i.test(error.message)) {
+          window.localStorage.removeItem("hwh-admin-session");
+          window.localStorage.removeItem("hwh-admin-user");
+          setToken("");
+          setUser(null);
+          setLoginError(error.message);
+        }
+      }
+    };
+    refreshStaffAccess();
+    const intervalId = window.setInterval(refreshStaffAccess, 15000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (Array.isArray(user?.pageAccess) && !user.pageAccess.includes(page)) {
+      setPage(user.pageAccess?.[0] || "Products");
+      setQuery("");
+    }
+  }, [user, page]);
+
   const notify = (message, type = "success") => {
     setToast({ message, type });
     window.setTimeout(() => setToast(null), 4500);
@@ -137,12 +174,15 @@ export default function AdminPortal() {
         setLoading(false);
         return;
       }
-      const route =
+      let route =
         target === "Dashboard"
           ? "/dashboard"
           : target === "Low Stock"
             ? "/low-stock"
             : `/${target.toLowerCase()}`;
+      if (target === "Products" && productCategoryScope?.id) {
+        route += `?parentCategoryId=${encodeURIComponent(productCategoryScope.id)}`;
+      }
       const result = await adminRequest(route, { token: activeToken });
       setData((current) => ({
         ...current,
@@ -178,7 +218,7 @@ export default function AdminPortal() {
         setToken("");
         setUser(null);
       }
-      notify(error.message);
+      notify(error.message, "error");
     } finally {
       setLoading(false);
     }
@@ -186,7 +226,7 @@ export default function AdminPortal() {
 
   useEffect(() => {
     if (token) load(page, token);
-  }, [token, page]);
+  }, [token, page, productCategoryScope]);
 
   // Synchronize active page and search query to URL and localStorage
   useEffect(() => {
@@ -256,6 +296,9 @@ export default function AdminPortal() {
       );
       setUser(result.user);
       setToken(result.token);
+      if (result.user.role === "employee") {
+        setPage(result.user.pageAccess?.[0] || "Products");
+      }
     } catch (error) {
       setLoginError(error.message);
     } finally {
@@ -279,6 +322,36 @@ export default function AdminPortal() {
       return result;
     } catch (error) {
       notify(error.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createStaffUser = async (body) => {
+    setBusy(true);
+    try {
+      await adminRequest("/users", { token, method: "POST", body });
+      await load("Users");
+      notify("User created successfully.");
+      return true;
+    } catch (error) {
+      notify(error.message || "Could not create user.", "error");
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const updateStaffUser = async (id, body) => {
+    setBusy(true);
+    try {
+      await adminRequest(`/users/${id}`, { token, method: "PUT", body });
+      await load("Users");
+      notify("User updated successfully.");
+      return true;
+    } catch (error) {
+      notify(error.message || "Could not update user.", "error");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -371,9 +444,6 @@ export default function AdminPortal() {
 
   const filtered = useMemo(() => {
     let rows = Array.isArray(data[page]) ? data[page] : [];
-    if (page === "Users") {
-      rows = rows.filter((r) => r.role === "admin");
-    }
     const needle = query.trim().toLowerCase();
     if (!needle) return rows;
     if (page === "Categories" && needle === "hidden") {
@@ -403,12 +473,14 @@ export default function AdminPortal() {
     setUser(null);
     setPage("Dashboard");
     setQuery("");
+    setProductCategoryScope(null);
     if (typeof window !== "undefined") {
       window.history.replaceState(null, "", window.location.pathname);
     }
   };
   const sharedPageProps = {
     rows: filtered,
+    catalog,
     query,
     setQuery,
     form,
@@ -419,7 +491,16 @@ export default function AdminPortal() {
     busy,
     onNavigate: (targetPage, filterQuery) => {
       setPage(targetPage);
-      if (filterQuery !== undefined) setQuery(filterQuery);
+      if (targetPage === "Products" && filterQuery?.parentCategoryId) {
+        setProductCategoryScope({
+          id: filterQuery.parentCategoryId,
+          name: filterQuery.parentCategoryName || "Parent category",
+        });
+        setQuery("");
+      } else {
+        setProductCategoryScope(null);
+        if (filterQuery !== undefined) setQuery(filterQuery);
+      }
     },
   };
 
@@ -432,7 +513,14 @@ export default function AdminPortal() {
         onRefresh={() => load("Dashboard")}
       />
     ),
-    Products: <ProductsPage {...sharedPageProps} catalog={catalog} />,
+    Products: (
+      <ProductsPage
+        {...sharedPageProps}
+        catalog={catalog}
+        categoryScopeName={productCategoryScope?.name || ""}
+        onClearCategoryScope={() => setProductCategoryScope(null)}
+      />
+    ),
     "Low Stock": (
       <LowStockPage
         {...sharedPageProps}
@@ -461,8 +549,18 @@ export default function AdminPortal() {
     ),
     Customers: <CustomersPage {...sharedPageProps} />,
     Blogs: <BlogsPage {...sharedPageProps} />,
-    Users: <UsersPage {...sharedPageProps} />,
-    Settings: <SettingsPage user={user} token={token} onNavigate={setPage} />,
+    Users: (
+      <UsersPage
+        {...sharedPageProps}
+        onCreateUser={createStaffUser}
+        onUpdateUser={updateStaffUser}
+        onDeleteUser={(item) => remove("users", item)}
+        isOpen={addingUser}
+        onOpen={() => setAddingUser(true)}
+        onClose={() => setAddingUser(false)}
+      />
+    ),
+    Settings: <SettingsPage token={token} />,
     Profile: <ProfilePage user={user} />,
   };
 
@@ -476,6 +574,7 @@ export default function AdminPortal() {
         sidebarOpen={sidebar}
         setSidebarOpen={setSidebar}
         pendingOrders={stats.pendingOrders || 0}
+        allowedPages={Array.isArray(user?.pageAccess) ? user.pageAccess : undefined}
       />
       <main>
         <AdminHeader
@@ -492,10 +591,16 @@ export default function AdminPortal() {
               <h1>{page}</h1>
               <p>{titleCopy}</p>
             </div>
-            <div className="admin-updated">
-              {loading ? "Syncing…" : "Live data"}
-              <span className="live-dot" />
-            </div>
+            {page === "Users" ? (
+              <button type="button" className="primary" onClick={() => setAddingUser(true)}>
+                <span aria-hidden="true">+</span> Add New User
+              </button>
+            ) : (
+              <div className="admin-updated">
+                {loading ? "Syncing…" : "Live data"}
+                <span className="live-dot" />
+              </div>
+            )}
           </div>
           {page !== "Dashboard" && (
             <PageStats
@@ -538,7 +643,7 @@ export default function AdminPortal() {
           className={`admin-toast ${toast.type === "error" ? "danger" : ""}`}
         >
           {toast.type === "error" ? (
-            <AlertCircle size={16} />
+            <X size={16} aria-hidden="true" />
           ) : (
             <Check size={16} />
           )}

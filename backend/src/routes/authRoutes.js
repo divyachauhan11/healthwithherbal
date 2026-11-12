@@ -4,6 +4,7 @@ const User = require("../models/User");
 const Otp = require("../models/Otp");
 const config = require("../config");
 const brevoService = require("../services/brevoService");
+const { createUserToken } = require("../middleware/userSession");
 
 const router = express.Router();
 
@@ -212,6 +213,7 @@ router.post("/login/verify-otp", async (req, res) => {
 
     return res.json({
       success: true,
+      token: createUserToken(user._id),
       user: {
         _id: user._id,
         name: user.name,
@@ -411,6 +413,7 @@ router.post("/signup/verify-otp", async (req, res) => {
     return res.status(201).json({
       success: true,
       message: "Account created successfully in database!",
+      token: createUserToken(newUser._id),
       user: {
         _id: newUser._id,
         name: newUser.name,
@@ -467,6 +470,7 @@ router.post("/social", async (req, res) => {
 
     return res.json({
       success: true,
+      token: createUserToken(user._id),
       user: {
         _id: user._id,
         name: user.name,

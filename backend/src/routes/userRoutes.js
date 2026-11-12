@@ -3,8 +3,61 @@ const mongoose = require("mongoose");
 const Order = require("../models/Order");
 const Address = require("../models/Address");
 const User = require("../models/User");
+const Wishlist = require("../models/Wishlist");
+const Product = require("../models/Product");
+const { requireUserSession } = require("../middleware/userSession");
 
 const router = express.Router();
+
+async function findWishlistProduct(rawId) {
+  const value = String(rawId ?? "").trim();
+  if (!value) return null;
+  if (/^\d+$/.test(value)) {
+    return Product.findOne({ legacyId: Number(value) }).select("_id");
+  }
+  if (!mongoose.isValidObjectId(value)) return null;
+  return Product.findById(value).select("_id");
+}
+
+router.get("/wishlist", requireUserSession, async (req, res) => {
+  try {
+    const items = await Wishlist.find({ userId: req.user._id }).populate("productId");
+    res.json({ items: items.map((item) => item.productId?.legacyId).filter((id) => id != null) });
+  } catch (error) {
+    console.error("Error fetching wishlist:", error);
+    res.status(500).json({ error: "Could not fetch your wishlist." });
+  }
+});
+
+router.post("/wishlist", requireUserSession, async (req, res) => {
+  try {
+    const productId = req.body?.productId;
+    const product = await findWishlistProduct(productId);
+    if (!product) return res.status(404).json({ error: "Product not found." });
+    await Wishlist.updateOne(
+      { userId: req.user._id, productId: product._id },
+      { $setOnInsert: { userId: req.user._id, productId: product._id } },
+      { upsert: true },
+    );
+    res.status(201).json({ success: true });
+  } catch (error) {
+    if (error.code === 11000) return res.json({ success: true });
+    console.error("Error saving wishlist item:", error);
+    res.status(500).json({ error: "Could not save this wishlist item." });
+  }
+});
+
+router.delete("/wishlist/:productId", requireUserSession, async (req, res) => {
+  try {
+    const product = await findWishlistProduct(req.params.productId);
+    if (!product) return res.status(404).json({ error: "Product not found." });
+    await Wishlist.deleteOne({ userId: req.user._id, productId: product._id });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error removing wishlist item:", error);
+    res.status(500).json({ error: "Could not remove this wishlist item." });
+  }
+});
 
 function normalizePhone(raw) {
   if (!raw) return "";
@@ -206,6 +259,69 @@ router.post("/addresses", async (req, res) => {
   } catch (error) {
     console.error("Error saving address:", error);
     return res.status(500).json({ error: "Could not save address to database." });
+  }
+});
+
+// PUT /api/user/addresses/:id
+// Update an existing saved delivery address.
+router.put("/addresses/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ error: "Invalid address ID." });
+    }
+
+    const {
+      fullName,
+      phone,
+      line1,
+      line2,
+      city,
+      state,
+      postalCode,
+      country,
+      tag,
+      userPhone,
+      userEmail,
+      userId: ownerId,
+    } = req.body;
+    if (!fullName || !line1 || !city || !postalCode) {
+      return res.status(400).json({
+        error: "Full name, address line 1, city, and postal code are required.",
+      });
+    }
+
+    const cleanUserPhone = normalizePhone(userPhone || phone);
+    const cleanUserEmail = String(userEmail || "").trim().toLowerCase();
+
+    const address = await Address.findByIdAndUpdate(
+      id,
+      {
+        $set: {
+          fullName: String(fullName).trim(),
+          phone: phone ? String(phone).trim() : "",
+          line1: String(line1).trim(),
+          line2: String(line2 || "").trim(),
+          city: String(city).trim(),
+          state: String(state || "").trim(),
+          postalCode: String(postalCode).trim(),
+          country: String(country || "India").trim(),
+          tag: String(tag || "Home").trim(),
+          userPhone: cleanUserPhone ? `+91${cleanUserPhone}` : "",
+          userEmail: cleanUserEmail,
+          userId: ownerId && mongoose.isValidObjectId(ownerId) ? ownerId : null,
+        },
+      },
+      { new: true, runValidators: true },
+    );
+
+    if (!address) {
+      return res.status(404).json({ error: "Saved address not found." });
+    }
+    return res.json({ success: true, address });
+  } catch (error) {
+    console.error("Error updating address:", error);
+    return res.status(500).json({ error: "Could not update saved address." });
   }
 });
 

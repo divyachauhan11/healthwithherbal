@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useState, useMemo, useRef } from "react";
-import { ArrowLeft, ArrowRight } from "lucide-react";
 import { SectionHeading } from "../../global/primitives";
 import { listBrands } from "../../../lib/api";
 
 export function BrandsSliderSection({ openCatalog, brands = [] }) {
   const [liveBrands, setLiveBrands] = useState([]);
   const [loading, setLoading] = useState(false);
-  const trackRef = useRef(null);
 
   // If brands prop is empty or not yet loaded from store init, fetch directly from backend API
   useEffect(() => {
@@ -64,16 +62,6 @@ export function BrandsSliderSection({ openCatalog, brands = [] }) {
     });
   }, [brands, liveBrands]);
 
-  const slideLeft = () => {
-    const el = trackRef.current || document.getElementById("brandTrack");
-    if (el) el.scrollBy({ left: -280, behavior: "smooth" });
-  };
-
-  const slideRight = () => {
-    const el = trackRef.current || document.getElementById("brandTrack");
-    if (el) el.scrollBy({ left: 280, behavior: "smooth" });
-  };
-
   // Duplicate for seamless infinite marquee loop
   const duplicated = useMemo(() => {
     if (displayedBrands.length === 0) return [];
@@ -93,29 +81,11 @@ export function BrandsSliderSection({ openCatalog, brands = [] }) {
             title="Brands we trust"
             copy="Authentic care from respected herbal and Ayurvedic houses."
           />
-          <div className="slider-controls">
-            <button
-              type="button"
-              aria-label="Previous brands"
-              onClick={slideLeft}
-              title="Previous brands"
-            >
-              <ArrowLeft size={18} />
-            </button>
-            <button
-              type="button"
-              aria-label="Next brands"
-              onClick={slideRight}
-              title="Next brands"
-            >
-              <ArrowRight size={18} />
-            </button>
-          </div>
         </div>
       </div>
 
       <div className="brand-marquee-viewport">
-        <div className="brand-marquee-track" id="brandTrack" ref={trackRef}>
+        <div className="brand-marquee-track">
           {duplicated.map((brand, idx) => (
             <button
               type="button"

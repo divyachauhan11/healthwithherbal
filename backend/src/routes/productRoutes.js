@@ -2,9 +2,9 @@ const express = require("express");
 const mongoose = require("mongoose");
 const Product = require("../models/Product");
 const asyncHandler = require("../middleware/asyncHandler");
+const escapeRegex = require("../utils/escapeRegex");
 
 const router = express.Router();
-const escapeRegex = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 router.get(
   "/",

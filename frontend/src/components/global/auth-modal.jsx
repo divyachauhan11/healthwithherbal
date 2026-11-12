@@ -11,19 +11,15 @@ import {
 } from "../../lib/api";
 
 export function AuthModal({ isOpen, onClose, onSuccess }) {
-  // Navigation views: "login" | "signup" | "otp"
   const [view, setView] = useState("login");
-  // Tracks whether the current OTP verification belongs to "login" or "signup"
   const [authMode, setAuthMode] = useState("login");
 
-  // Form states
-  const [loginInput, setLoginInput] = useState(""); // Email or 10-digit phone
+  const [loginInput, setLoginInput] = useState("");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
   const [otp, setOtp] = useState(["", "", "", "", "", ""]);
 
-  // Feedback & security states
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notRegistered, setNotRegistered] = useState(false);
@@ -32,7 +28,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
   const [devOtp, setDevOtp] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Countdown timer for resend OTP
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const timer = setInterval(() => {
@@ -43,9 +38,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
 
   if (!isOpen) return null;
 
-  // ---------------------------------------------------------------------------
-  // 1. Handle Login Submit (Checks MongoDB: strictly blocks if user not in DB!)
-  // ---------------------------------------------------------------------------
   const handleLoginSubmit = async (e) => {
     e.preventDefault();
     const cleanInput = (loginInput || "").trim();
@@ -92,9 +84,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // 2. Handle Signup Submit (Validates and checks DB uniqueness)
-  // ---------------------------------------------------------------------------
   const handleSignupSubmit = async (e) => {
     e.preventDefault();
     if (!fullName || !fullName.trim()) {
@@ -138,9 +127,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // 3. Handle OTP Verification (Stores user in MongoDB on signup; loads on login)
-  // ---------------------------------------------------------------------------
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     const entered = otp.join("").trim();
@@ -155,7 +141,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
     try {
       let authenticatedUser = null;
       if (authMode === "signup") {
-        // STORE NEW USER IN MONGODB DATABASE
         authenticatedUser = await verifySignupOtp({
           name: fullName.trim(),
           email: email.trim(),
@@ -163,7 +148,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
           otp: entered,
         });
       } else {
-        // RETRIEVE VERIFIED USER FROM MONGODB DATABASE
         authenticatedUser = await verifyLoginOtp({
           identifier: loginInput.trim(),
           otp: entered,
@@ -184,9 +168,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // 4. Handle Social Login (Google / Apple)
-  // ---------------------------------------------------------------------------
   const handleSocialAuth = async (provider) => {
     setLoading(true);
     setError("");
@@ -205,9 +186,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // 5. Handle Resend OTP
-  // ---------------------------------------------------------------------------
   const handleResendOtp = async () => {
     if (resendCooldown > 0) return;
     setError("");
@@ -234,9 +212,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
     }
   };
 
-  // ---------------------------------------------------------------------------
-  // 6. OTP Clipboard Paste & Keyboard handlers
-  // ---------------------------------------------------------------------------
   const handleOtpPaste = (e) => {
     e.preventDefault();
     const pasteData = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
@@ -262,9 +237,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
           <X size={19} />
         </button>
 
-        {/* ================================================================= */}
-        {/* VIEW 1: LOGIN (Strictly checks database before sending Brevo OTP) */}
-        {/* ================================================================= */}
         {view === "login" && (
           <div className="auth-modal-content">
             <h2 className="auth-modal-title">Welcome Back!</h2>
@@ -416,9 +388,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
           </div>
         )}
 
-        {/* ================================================================= */}
-        {/* VIEW 2: SIGN UP (Creates and stores user in MongoDB database)     */}
-        {/* ================================================================= */}
         {view === "signup" && (
           <div className="auth-modal-content">
             <h2 className="auth-modal-title">Create Account</h2>
@@ -537,9 +506,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
           </div>
         )}
 
-        {/* ================================================================= */}
-        {/* VIEW 3: OTP VERIFICATION (Brevo Email Code Verification)           */}
-        {/* ================================================================= */}
         {view === "otp" && (
           <div className="auth-modal-content">
             <div

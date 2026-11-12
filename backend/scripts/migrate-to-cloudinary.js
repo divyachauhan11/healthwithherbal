@@ -10,6 +10,25 @@ const Product = require("../src/models/Product");
 const Brand = require("../src/models/Brand");
 const BlogPost = require("../src/models/BlogPost");
 
+function replaceLocalUploadUrl(value, urlMap) {
+  let result = value;
+  for (const [filename, newUrl] of urlMap) {
+    if (result && result.includes(filename)) result = newUrl;
+  }
+  return result;
+}
+
+function replaceLocalUploadUrls(values, urlMap) {
+  if (!Array.isArray(values)) return { values, changed: false };
+  const updatedValues = values.map((value) =>
+    replaceLocalUploadUrl(value, urlMap),
+  );
+  return {
+    values: updatedValues,
+    changed: updatedValues.some((value, index) => value !== values[index]),
+  };
+}
+
 async function migrate() {
   console.log("==================================================");
   console.log("  Health with Herbal - Cloudinary Migration Tool  ");
@@ -80,17 +99,16 @@ async function migrate() {
   for (const prod of products) {
     let changed = false;
 
-    for (const [filename, newUrl] of urlMap.entries()) {
-      if (prod.image && prod.image.includes(filename)) {
-        prod.image = newUrl;
-        changed = true;
-      }
-      if (Array.isArray(prod.images)) {
-        prod.images = prod.images.map((img) =>
-          img && img.includes(filename) ? newUrl : img
-        );
-        changed = true;
-      }
+    const image = replaceLocalUploadUrl(prod.image, urlMap);
+    if (image !== prod.image) {
+      prod.image = image;
+      changed = true;
+    }
+
+    const images = replaceLocalUploadUrls(prod.images, urlMap);
+    if (images.changed) {
+      prod.images = images.values;
+      changed = true;
     }
 
     if (changed) {
@@ -111,21 +129,22 @@ async function migrate() {
   for (const brand of brands) {
     let changed = false;
 
-    for (const [filename, newUrl] of urlMap.entries()) {
-      if (brand.logoUrl && brand.logoUrl.includes(filename)) {
-        brand.logoUrl = newUrl;
-        changed = true;
-      }
-      if (brand.image && brand.image.includes(filename)) {
-        brand.image = newUrl;
-        changed = true;
-      }
-      if (Array.isArray(brand.images)) {
-        brand.images = brand.images.map((img) =>
-          img && img.includes(filename) ? newUrl : img
-        );
-        changed = true;
-      }
+    const logoUrl = replaceLocalUploadUrl(brand.logoUrl, urlMap);
+    if (logoUrl !== brand.logoUrl) {
+      brand.logoUrl = logoUrl;
+      changed = true;
+    }
+
+    const image = replaceLocalUploadUrl(brand.image, urlMap);
+    if (image !== brand.image) {
+      brand.image = image;
+      changed = true;
+    }
+
+    const images = replaceLocalUploadUrls(brand.images, urlMap);
+    if (images.changed) {
+      brand.images = images.values;
+      changed = true;
     }
 
     if (changed) {
@@ -140,16 +159,9 @@ async function migrate() {
   });
 
   for (const blog of blogs) {
-    let changed = false;
-
-    for (const [filename, newUrl] of urlMap.entries()) {
-      if (blog.coverImage && blog.coverImage.includes(filename)) {
-        blog.coverImage = newUrl;
-        changed = true;
-      }
-    }
-
-    if (changed) {
+    const coverImage = replaceLocalUploadUrl(blog.coverImage, urlMap);
+    if (coverImage !== blog.coverImage) {
+      blog.coverImage = coverImage;
       await blog.save();
       updatedBlogs++;
     }

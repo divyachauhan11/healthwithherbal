@@ -1,18 +1,42 @@
 const cloudinary = require("cloudinary").v2;
+const placeholderValues = new Set([
+  "your_cloudinary_cloud_name",
+  "your_cloudinary_api_key",
+  "your_cloudinary_api_secret",
+  "replace_with_cloud_name",
+  "your_cloud_name",
+  "your_api_key",
+  "your_api_secret",
+]);
+
+function getCloudinaryCredentials() {
+  return {
+    cloud_name: (process.env.CLOUDINARY_CLOUD_NAME || "").trim(),
+    api_key: (process.env.CLOUDINARY_API_KEY || "").trim(),
+    api_secret: (process.env.CLOUDINARY_API_SECRET || "").trim(),
+  };
+}
+
+function hasCredentials(credentials) {
+  return Object.values(credentials).every(Boolean);
+}
+
+function credentialsAreConfigured(credentials) {
+  return (
+    hasCredentials(credentials) &&
+    Object.values(credentials).every((value) => !placeholderValues.has(value))
+  );
+}
 
 /**
  * Configure Cloudinary with environment variables
  */
 function configureCloudinary() {
-  const cloud_name = (process.env.CLOUDINARY_CLOUD_NAME || "").trim();
-  const api_key = (process.env.CLOUDINARY_API_KEY || "").trim();
-  const api_secret = (process.env.CLOUDINARY_API_SECRET || "").trim();
+  const credentials = getCloudinaryCredentials();
 
-  if (cloud_name && api_key && api_secret) {
+  if (hasCredentials(credentials)) {
     cloudinary.config({
-      cloud_name,
-      api_key,
-      api_secret,
+      ...credentials,
       secure: true,
     });
     return true;
@@ -24,28 +48,7 @@ function configureCloudinary() {
  * Check if Cloudinary credentials are validly provided
  */
 function isCloudinaryConfigured() {
-  const cloud_name = (process.env.CLOUDINARY_CLOUD_NAME || "").trim();
-  const api_key = (process.env.CLOUDINARY_API_KEY || "").trim();
-  const api_secret = (process.env.CLOUDINARY_API_SECRET || "").trim();
-
-  const dummyValues = [
-    "your_cloudinary_cloud_name",
-    "your_cloudinary_api_key",
-    "your_cloudinary_api_secret",
-    "replace_with_cloud_name",
-    "your_cloud_name",
-    "your_api_key",
-    "your_api_secret",
-  ];
-
-  return Boolean(
-    cloud_name &&
-    api_key &&
-    api_secret &&
-    !dummyValues.includes(cloud_name) &&
-    !dummyValues.includes(api_key) &&
-    !dummyValues.includes(api_secret)
-  );
+  return credentialsAreConfigured(getCloudinaryCredentials());
 }
 
 /**

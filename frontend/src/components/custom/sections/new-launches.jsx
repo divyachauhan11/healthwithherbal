@@ -51,7 +51,7 @@ export function NewLaunchesSection({
           </button>
 
           <div className="products-grid new-launches-grid">
-            {visibleItems.slice(0, 4).map((product) => (<ProductCard key={product.id} product={product} wished={wished.includes(product.id)} added={cart.includes(product.id)} onWish={() => onWish(product.id)} onAdd={() => onAdd(product.id)} onOpen={() => openProduct(product.id)}/>))}
+            {visibleItems.slice(0, 4).map((product) => (<ProductCard key={product.id} product={product} wished={wished.includes(product.id)} added={cart.includes(product.id)} onWish={() => onWish(product.id)} onAdd={() => onAdd(product.id)} onOpen={() => openProduct(product.id)} onSimilar={() => openCatalog(product.category || "All Products")}/>))}
           </div>
 
           <button type="button" className="carousel-arrow next" onClick={nextSlide} aria-label="Next launches">

@@ -17,17 +17,22 @@ import {
   Printer,
   Star,
   Sparkles,
+  Pencil,
 } from "lucide-react";
 import {
   fetchUserOrders,
   fetchUserAddresses,
   saveUserAddress,
+  updateUserAddress,
   deleteUserAddress,
 } from "../../../lib/api";
 import { ProductReviewModal } from "../../../components/global";
+import { FormModal } from "../../../components/admin/global/FormModal";
 
 export function AccountPage({
   currentUser,
+  initialTab = "overview",
+  onViewOrder,
   onLogout,
   navigate,
   openAuthModal,
@@ -40,21 +45,24 @@ export function AccountPage({
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [reviewModalData, setReviewModalData] = useState(null);
 
-  // Address form modal / toggle state
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  // Address modal state
   const [showAddAddress, setShowAddAddress] = useState(false);
+  const [editingAddress, setEditingAddress] = useState(null);
   const [savingAddress, setSavingAddress] = useState(false);
-  const [addrForm, setAddrForm] = useState({
-    fullName: currentUser?.name || "",
-    phone: currentUser?.phone || "",
-    line1: "",
-    line2: "",
-    city: "",
-    state: "",
-    postalCode: "",
-    country: "India",
-    tag: "Home",
-    isDefault: true,
-  });
+
+  const handleOpenAddAddress = () => {
+    setEditingAddress(null);
+    setShowAddAddress(true);
+  };
+
+  const handleOpenEditAddress = (addr) => {
+    setEditingAddress(addr);
+    setShowAddAddress(true);
+  };
 
   // Load orders and addresses whenever currentUser changes
   useEffect(() => {
@@ -155,38 +163,53 @@ export function AccountPage({
     };
   }, [currentUser, activeTab]);
 
-  // Handle saving new address
-  const handleSaveAddress = async (e) => {
-    e.preventDefault();
-    if (!addrForm.fullName || !addrForm.line1 || !addrForm.city || !addrForm.postalCode) {
+  // Handle saving new or updated address via modal
+  const handleSaveAddress = async (formData) => {
+    if (
+      !formData.fullName?.trim() ||
+      !formData.line1?.trim() ||
+      !formData.city?.trim() ||
+      !formData.postalCode?.trim()
+    ) {
       if (notify) notify("Please fill all required address fields.");
       return;
     }
 
     setSavingAddress(true);
     try {
-      const newAddr = await saveUserAddress({
-        ...addrForm,
-        userPhone: currentUser?.phone || addrForm.phone,
+      const payload = {
+        fullName: formData.fullName.trim(),
+        phone: formData.phone?.trim() || currentUser?.phone || "",
+        line1: formData.line1.trim(),
+        line2: formData.line2?.trim() || "",
+        city: formData.city.trim(),
+        state: formData.state?.trim() || "",
+        postalCode: formData.postalCode.trim(),
+        country: formData.country?.trim() || "India",
+        tag: formData.tag || "Home",
+        isDefault: Boolean(formData.isDefault),
+        userPhone: currentUser?.phone || formData.phone || "",
         userEmail: currentUser?.email || "",
         userId: currentUser?._id || null,
-      });
+      };
 
-      setAddresses((prev) => [newAddr, ...prev]);
+      if (editingAddress?._id) {
+        const updated = await updateUserAddress(editingAddress._id, payload);
+        setAddresses((prev) =>
+          prev.map((a) => (a._id === updated._id ? updated : a))
+        );
+        if (notify) notify("Address updated successfully!");
+      } else {
+        const newAddr = await saveUserAddress({
+          ...payload,
+          isDefault: payload.isDefault ?? addresses.length === 0,
+        });
+        setAddresses((prev) => [newAddr, ...prev]);
+        if (notify) notify("Address saved successfully!");
+      }
+
       setShowAddAddress(false);
-      setAddrForm({
-        fullName: currentUser?.name || "",
-        phone: currentUser?.phone || "",
-        line1: "",
-        line2: "",
-        city: "",
-        state: "",
-        postalCode: "",
-        country: "India",
-        tag: "Home",
-        isDefault: false,
-      });
-      if (notify) notify("Address saved successfully!");
+      setEditingAddress(null);
     } catch (err) {
       if (notify) notify(err.message || "Failed to save address.");
     } finally {
@@ -429,7 +452,7 @@ export function AccountPage({
                           <button
                             type="button"
                             className="order-detail-btn"
-                            onClick={() => setActiveTab("orders")}
+                            onClick={() => onViewOrder?.(order)}
                           >
                             View Details
                           </button>
@@ -476,7 +499,7 @@ export function AccountPage({
                           className="account-inline-cta"
                           onClick={() => {
                             setActiveTab("addresses");
-                            setShowAddAddress(true);
+                            handleOpenAddAddress();
                           }}
                         >
                           Add New Address Now
@@ -665,14 +688,9 @@ export function AccountPage({
                         <button
                           type="button"
                           className="order-view-receipt-action"
-                          onClick={() => {
-                            try {
-                              localStorage.setItem("hwh_last_order", JSON.stringify(order));
-                            } catch (e) {}
-                            navigate("order-placed");
-                          }}
+                          onClick={() => onViewOrder?.(order)}
                         >
-                          <Printer size={13} /> View Order Receipt
+                          <FileText size={13} /> View Details
                         </button>
                       </div>
                     </div>
@@ -692,178 +710,14 @@ export function AccountPage({
                     Manage your delivery addresses for seamless checkout.
                   </p>
                 </div>
-                {!showAddAddress && (
-                  <button
-                    type="button"
-                    className="app-button add-address-btn"
-                    onClick={() => setShowAddAddress(true)}
-                  >
-                    <Plus size={16} /> Add New Address
-                  </button>
-                )}
+                <button
+                  type="button"
+                  className="app-button add-address-btn"
+                  onClick={handleOpenAddAddress}
+                >
+                  <Plus size={16} /> Add New Address
+                </button>
               </div>
-
-              {/* Add Address Form Drawer/Box */}
-              {showAddAddress && (
-                <div className="add-address-form-box">
-                  <div className="form-box-header">
-                    <h3>Add New Address</h3>
-                    <button
-                      type="button"
-                      className="form-close-btn"
-                      onClick={() => setShowAddAddress(false)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-
-                  <form onSubmit={handleSaveAddress} className="add-address-form">
-                    <div className="form-row-2">
-                      <label className="auth-label">
-                        <span>Full Name <span className="required-star">*</span></span>
-                        <input
-                          type="text"
-                          required
-                          value={addrForm.fullName}
-                          onChange={(e) => setAddrForm({ ...addrForm, fullName: e.target.value })}
-                          className="auth-input"
-                          placeholder="Recipient Full Name"
-                        />
-                      </label>
-
-                      <label className="auth-label">
-                        <span>Phone Number <span className="required-star">*</span></span>
-                        <input
-                          type="tel"
-                          required
-                          value={addrForm.phone}
-                          onChange={(e) => setAddrForm({ ...addrForm, phone: e.target.value })}
-                          className="auth-input"
-                          placeholder="10-digit Phone Number"
-                        />
-                      </label>
-                    </div>
-
-                    <div className="form-row-2">
-                      <label className="auth-label">
-                        <span>Address Type / Tag</span>
-                        <select
-                          value={addrForm.tag}
-                          onChange={(e) => setAddrForm({ ...addrForm, tag: e.target.value })}
-                          className="auth-input"
-                        >
-                          <option value="Home">Home</option>
-                          <option value="Work">Work / Office</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </label>
-
-                      <label className="auth-label">
-                        <span>Country <span className="required-star">*</span></span>
-                        <input
-                          type="text"
-                          required
-                          value={addrForm.country}
-                          onChange={(e) => setAddrForm({ ...addrForm, country: e.target.value })}
-                          className="auth-input"
-                        />
-                      </label>
-                    </div>
-
-                    <label className="auth-label">
-                      <span>Street Address Line 1 <span className="required-star">*</span></span>
-                      <input
-                        type="text"
-                        required
-                        value={addrForm.line1}
-                        onChange={(e) => setAddrForm({ ...addrForm, line1: e.target.value })}
-                        className="auth-input"
-                        placeholder="House / Flat No., Building, Street"
-                      />
-                    </label>
-
-                    <label className="auth-label">
-                      <span>Address Line 2 (Optional)</span>
-                      <input
-                        type="text"
-                        value={addrForm.line2}
-                        onChange={(e) => setAddrForm({ ...addrForm, line2: e.target.value })}
-                        className="auth-input"
-                        placeholder="Apartment, suite, landmark"
-                      />
-                    </label>
-
-                    <div className="form-row-3">
-                      <label className="auth-label">
-                        <span>City <span className="required-star">*</span></span>
-                        <input
-                          type="text"
-                          required
-                          value={addrForm.city}
-                          onChange={(e) => setAddrForm({ ...addrForm, city: e.target.value })}
-                          className="auth-input"
-                          placeholder="City"
-                        />
-                      </label>
-
-                      <label className="auth-label">
-                        <span>State</span>
-                        <input
-                          type="text"
-                          value={addrForm.state}
-                          onChange={(e) => setAddrForm({ ...addrForm, state: e.target.value })}
-                          className="auth-input"
-                          placeholder="State"
-                        />
-                      </label>
-
-                      <label className="auth-label">
-                        <span>Postal Code (PIN) <span className="required-star">*</span></span>
-                        <input
-                          type="text"
-                          required
-                          value={addrForm.postalCode}
-                          onChange={(e) => setAddrForm({ ...addrForm, postalCode: e.target.value })}
-                          className="auth-input"
-                          placeholder="e.g. 110001"
-                        />
-                      </label>
-                    </div>
-
-                    <label className="address-checkbox-label">
-                      <input
-                        type="checkbox"
-                        checked={addrForm.isDefault}
-                        onChange={(e) => setAddrForm({ ...addrForm, isDefault: e.target.checked })}
-                      />
-                      <span>Make this my default shipping address</span>
-                    </label>
-
-                    <div className="form-action-row">
-                      <button
-                        type="submit"
-                        className="app-button"
-                        disabled={savingAddress}
-                      >
-                        {savingAddress ? (
-                          <span style={{ display: "inline-flex", alignItems: "center", gap: "8px" }}>
-                            <Loader2 size={16} className="spin-animate" /> Saving to Database...
-                          </span>
-                        ) : (
-                          "Save Address"
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        className="address-cancel-btn"
-                        onClick={() => setShowAddAddress(false)}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
 
               {/* Addresses List */}
               {loadingAddresses ? (
@@ -871,7 +725,7 @@ export function AccountPage({
                   <Loader2 size={28} className="spin-animate" />
                   <span>Loading saved addresses from database...</span>
                 </div>
-              ) : addresses.length === 0 && !showAddAddress ? (
+              ) : addresses.length === 0 ? (
                 <div className="account-empty-card" style={{ marginTop: "24px" }}>
                   <div className="account-empty-icon-box">
                     <div className="mock-pin-3d">
@@ -887,7 +741,7 @@ export function AccountPage({
                       type="button"
                       className="app-button"
                       style={{ marginTop: "14px" }}
-                      onClick={() => setShowAddAddress(true)}
+                      onClick={handleOpenAddAddress}
                     >
                       <Plus size={16} /> Add Address
                     </button>
@@ -922,6 +776,14 @@ export function AccountPage({
                       <div className="address-card-actions">
                         <button
                           type="button"
+                          className="address-edit-btn"
+                          onClick={() => handleOpenEditAddress(addr)}
+                          title="Edit address"
+                        >
+                          <Pencil size={14} /> Edit
+                        </button>
+                        <button
+                          type="button"
                           className="address-delete-btn"
                           onClick={() => handleDeleteAddress(addr._id)}
                           title="Delete address"
@@ -933,6 +795,29 @@ export function AccountPage({
                   ))}
                 </div>
               )}
+
+              {/* Add / Edit Address Pop-up Modal (Powered by FormModal & Modal) */}
+              <FormModal
+                entity="address"
+                isOpen={showAddAddress}
+                initial={
+                  editingAddress || {
+                    fullName: currentUser?.name || "",
+                    phone: currentUser?.phone || "",
+                    country: "India",
+                    tag: "Home",
+                    isDefault: addresses.length === 0,
+                  }
+                }
+                onSave={handleSaveAddress}
+                onClose={() => {
+                  setShowAddAddress(false);
+                  setEditingAddress(null);
+                }}
+                busy={savingAddress}
+                submitLabel={editingAddress ? "Save Changes" : "Save Address"}
+                className="checkout-address-form-modal address-modal-popup"
+              />
             </div>
           )}
         </main>

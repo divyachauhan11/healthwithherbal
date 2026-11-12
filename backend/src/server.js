@@ -6,8 +6,8 @@ const { syncAllProductRatings } = require("./utils/syncRatings");
 
 async function start() {
   await connectDatabase();
-  await syncAllProductRatings().catch((err) => console.error("Initial ratings sync failed:", err.message));
   const server = app.listen(config.port, () => console.log(`Healthwithherbal API listening on port ${config.port}`));
+  syncAllProductRatings().catch((err) => console.error("Initial ratings sync failed:", err.message));
 
   const shutdown = async (signal) => {
     console.log(`${signal} received; closing API server`);
