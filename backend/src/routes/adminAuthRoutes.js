@@ -50,6 +50,7 @@ function registerAdminAuthRoutes({
           },
           { upsert: true },
         );
+        const rootProfile = await User.findOne({ email: email.toLowerCase() }).select("avatarUrl").lean();
 
         return res.json({
           token: createAdminToken(email.toLowerCase(), secret, {
@@ -60,6 +61,7 @@ function registerAdminAuthRoutes({
           user: {
             name: "Store administrator",
             email: email.toLowerCase(),
+            avatarUrl: rootProfile?.avatarUrl || "",
             role: "admin",
             pageAccess: adminPortalPages,
           },
@@ -99,6 +101,7 @@ function registerAdminAuthRoutes({
           _id: staff._id,
           name: staff.name,
           email: staff.email,
+          avatarUrl: staff.avatarUrl || "",
           role: staff.role,
           pageAccess: claims.pageAccess,
         },
@@ -112,10 +115,12 @@ function registerAdminAuthRoutes({
     asyncHandler(async (req, res) => {
       if (!req.admin.userId) {
         const pageAccess = req.admin.pageAccess || adminPortalPages;
+        const rootProfile = await User.findOne({ email: req.admin.email.toLowerCase() }).select("avatarUrl").lean();
         return res.json({
           user: {
             name: "Store administrator",
             email: req.admin.email,
+            avatarUrl: rootProfile?.avatarUrl || "",
             role: "admin",
             pageAccess,
           },
@@ -123,7 +128,7 @@ function registerAdminAuthRoutes({
       }
 
       const staff = await User.findById(req.admin.userId)
-        .select("name email role isActive pageAccess")
+        .select("name email avatarUrl role isActive pageAccess")
         .lean();
       if (!staff || !staff.isActive || !["admin", "employee"].includes(staff.role)) {
         return res.status(401).json({
@@ -137,6 +142,7 @@ function registerAdminAuthRoutes({
           _id: staff._id,
           name: staff.name,
           email: staff.email,
+          avatarUrl: staff.avatarUrl || "",
           role: staff.role,
           pageAccess,
         },

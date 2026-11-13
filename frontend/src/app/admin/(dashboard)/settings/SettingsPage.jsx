@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Settings, Plus, Trash2, Save, Megaphone, Pencil, X, Tags } from "lucide-react";
 import { adminRequest } from "../../../../lib/admin-api";
 
-export default function SettingsPage({ token }) {
+export default function SettingsPage({ token, user }) {
   const [announcements, setAnnouncements] = useState([]);
   const [loadingAnnouncements, setLoadingAnnouncements] = useState(true);
   const [savingAnnouncements, setSavingAnnouncements] = useState(false);

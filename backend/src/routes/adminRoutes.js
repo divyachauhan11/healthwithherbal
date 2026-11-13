@@ -24,6 +24,7 @@ const registerAdminStaffRoutes = require("./adminStaffRoutes");
 const registerAdminSettingsRoutes = require("./adminSettingsRoutes");
 const registerAdminDashboardRoutes = require("./adminDashboardRoutes");
 const registerAdminCustomerRoutes = require("./adminCustomerRoutes");
+const registerAdminProfileRoutes = require("./adminProfileRoutes");
 
 const {
   adminPortalPages,
@@ -131,4 +132,5 @@ registerAdminStaffRoutes({
   validId,
   invalid,
 });
+registerAdminProfileRoutes({ router, asyncHandler, User });
 module.exports = router;

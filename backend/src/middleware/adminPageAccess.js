@@ -25,6 +25,13 @@ const requirePageAccess = async (req, res, next) => {
     // Legacy root-admin sessions have no explicit page list and retain full access.
     if (req.admin.role === "admin" && req.admin.pageAccess === null) return next();
     const page = portalPageForPath(req.path);
+    // Shared media uploads are used by profile photos and other admin forms.
+    // The session is authenticated above and staff accounts have already been
+    // checked for active admin/employee status.
+    if (req.path.split("/").filter(Boolean)[0] === "upload") return next();
+    // Every authenticated admin can manage their own profile, regardless of the
+    // granular page list assigned to their account.
+    if (page === "Profile") return next();
     if (page && req.admin.pageAccess?.includes(page)) return next();
     return res.status(403).json({ error: "You do not have access to this admin page." });
   } catch (error) {

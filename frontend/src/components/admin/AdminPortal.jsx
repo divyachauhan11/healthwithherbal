@@ -156,7 +156,10 @@ export default function AdminPortal() {
   }, [token]);
 
   useEffect(() => {
-    if (Array.isArray(user?.pageAccess) && !user.pageAccess.includes(page)) {
+    const canViewPage = page === "Profile"
+      || !Array.isArray(user?.pageAccess)
+      || user.pageAccess.includes(page);
+    if (!canViewPage) {
       setPage(user.pageAccess?.[0] || "Products");
       setQuery("");
     }
@@ -560,8 +563,17 @@ export default function AdminPortal() {
         onClose={() => setAddingUser(false)}
       />
     ),
-    Settings: <SettingsPage token={token} />,
-    Profile: <ProfilePage user={user} />,
+    Settings: <SettingsPage token={token} user={user} />,
+    Profile: (
+      <ProfilePage
+        user={user}
+        token={token}
+        onUserUpdated={(updatedUser) => {
+          setUser(updatedUser);
+          window.localStorage.setItem("hwh-admin-user", JSON.stringify(updatedUser));
+        }}
+      />
+    ),
   };
 
   return (
@@ -574,7 +586,9 @@ export default function AdminPortal() {
         sidebarOpen={sidebar}
         setSidebarOpen={setSidebar}
         pendingOrders={stats.pendingOrders || 0}
-        allowedPages={Array.isArray(user?.pageAccess) ? user.pageAccess : undefined}
+        allowedPages={Array.isArray(user?.pageAccess)
+          ? [...new Set([...user.pageAccess, ...(user.role === "employee" ? ["Profile"] : [])])]
+          : undefined}
       />
       <main>
         <AdminHeader

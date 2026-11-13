@@ -15,6 +15,8 @@ const userSchema = new mongoose.Schema(
       select: false,
     },
     phone: { type: String, trim: true, index: true },
+    avatarUrl: { type: String, trim: true, default: "" },
+    avatarPublicId: { type: String, trim: true, default: "" },
     role: { type: String, enum: ["customer", "admin", "employee"], default: "customer" },
     isActive: { type: Boolean, default: true },
     pageAccess: { type: [String], default: [] },

@@ -5,7 +5,7 @@ import { SearchField, Modal } from "../../../../components/admin/global";
 import { UserTable } from "../../../../components/admin/custom";
 
 const employeePages = [
-  "Products", "Categories", "Brands", "Coupons", "Reviews", "Orders", "Customers", "Blogs",
+  "Products", "Categories", "Brands", "Coupons", "Reviews", "Orders", "Customers", "Blogs", "Profile",
 ];
 const allAdminPages = [
   "Dashboard", "Products", "Low Stock", "Categories", "Brands", "Orders",
@@ -57,7 +57,9 @@ export default function UsersPage({ rows = [], query, setQuery, onCreateUser, on
       email: user.email || "",
       role: user.role || "employee",
       isActive: user.isActive !== false,
-      pageAccess: user.pageAccess || (user.role === "admin" ? [...allAdminPages] : [...employeePages]),
+      pageAccess: user.role === "employee"
+        ? [...new Set([...(user.pageAccess || employeePages), "Profile"])]
+        : user.pageAccess || [...allAdminPages],
       password: "",
       confirmPassword: "",
     });
@@ -132,8 +134,9 @@ export default function UsersPage({ rows = [], query, setQuery, onCreateUser, on
                 <label key={pageName}>
                   <input
                     type="checkbox"
-                    checked={form.pageAccess.includes(pageName)}
+                    checked={pageName === "Profile" && form.role === "employee" || form.pageAccess.includes(pageName)}
                     onChange={() => togglePage(pageName)}
+                    disabled={pageName === "Profile" && form.role === "employee"}
                   />
                   <span>{pageName}</span>
                 </label>

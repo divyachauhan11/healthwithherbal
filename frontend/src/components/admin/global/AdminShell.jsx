@@ -144,7 +144,7 @@ export function AdminHeader({ query, setQuery, user, onOpenMenu, onLogout }) {
           <i />
         </button>
         <div className="avatar">
-          {(user?.name || "Admin").slice(0, 2).toUpperCase()}
+          {user?.avatarUrl ? <img src={user.avatarUrl} alt="" /> : (user?.name || "Admin").slice(0, 2).toUpperCase()}
         </div>
         <div className="admin">
           <b>{user?.name || "Administrator"}</b>
