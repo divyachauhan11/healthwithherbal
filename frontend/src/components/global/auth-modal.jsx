@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, Loader2, AlertCircle, Mail, CheckCircle2 } from "lucide-react";
-import { GoogleIcon, AppleIcon } from "./icons";
+import { GoogleIcon } from "./icons";
 import {
   requestLoginOtp,
   verifyLoginOtp,
@@ -27,6 +27,63 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
   const [maskedTarget, setMaskedTarget] = useState("");
   const [devOtp, setDevOtp] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
+  const googleButtonRef = useRef(null);
+
+  useEffect(() => {
+    if (!isOpen || view !== "login" || !googleButtonRef.current) return;
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+    if (!clientId) return;
+
+    let cancelled = false;
+    const renderGoogleButton = () => {
+      if (cancelled || !window.google?.accounts?.id || !googleButtonRef.current) return;
+      window.google.accounts.id.initialize({
+        client_id: clientId,
+        callback: async ({ credential }) => {
+          if (!credential) {
+            setError("Google sign-in did not return a credential. Please try again.");
+            return;
+          }
+          setLoading(true);
+          setError("");
+          try {
+            const user = await socialLogin(credential);
+            onSuccess?.(user);
+            onClose();
+          } catch (err) {
+            setError(err.message || "Google sign-in failed.");
+          } finally {
+            setLoading(false);
+          }
+        },
+      });
+      googleButtonRef.current.replaceChildren();
+      window.google.accounts.id.renderButton(googleButtonRef.current, {
+        type: "standard", theme: "outline", size: "large", text: "continue_with",
+        shape: "rectangular", width: 260,
+      });
+    };
+
+    if (window.google?.accounts?.id) {
+      renderGoogleButton();
+    } else {
+      let script = document.querySelector('script[src="https://accounts.google.com/gsi/client"]');
+      if (!script) {
+        script = document.createElement("script");
+        script.src = "https://accounts.google.com/gsi/client";
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+      }
+      script.addEventListener("load", renderGoogleButton);
+      script.addEventListener("error", () => setError("Could not load Google sign-in. Please try again."), { once: true });
+      return () => {
+        cancelled = true;
+        script.removeEventListener("load", renderGoogleButton);
+      };
+    }
+    return () => { cancelled = true; };
+  }, [isOpen, view, onClose, onSuccess]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
@@ -163,24 +220,6 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
         err.message ||
           "Verification failed. Please check your code or request a new one.",
       );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSocialAuth = async (provider) => {
-    setLoading(true);
-    setError("");
-    try {
-      const user = await socialLogin({
-        name: `${provider} User`,
-        email: "",
-        provider: provider.toLowerCase(),
-      });
-      if (onSuccess) onSuccess(user);
-      onClose();
-    } catch (err) {
-      setError(err.message || "Social sign-in failed.");
     } finally {
       setLoading(false);
     }
@@ -338,24 +377,19 @@ export function AuthModal({ isOpen, onClose, onSuccess }) {
             </div>
 
             <div className="auth-social-row">
-              <button
-                type="button"
-                className="auth-social-btn"
-                onClick={() => handleSocialAuth("Google")}
-                disabled={loading}
-                aria-label="Continue with Google"
-              >
-                <GoogleIcon />
-              </button>
-              <button
-                type="button"
-                className="auth-social-btn"
-                onClick={() => handleSocialAuth("Apple")}
-                disabled={loading}
-                aria-label="Continue with Apple"
-              >
-                <AppleIcon />
-              </button>
+              {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ? (
+                <div ref={googleButtonRef} aria-label="Continue with Google" />
+              ) : (
+                <button
+                  type="button"
+                  className="auth-google-login-btn"
+                  onClick={() => setError("Google sign-in is not configured yet.")}
+                  disabled={loading}
+                >
+                  <GoogleIcon />
+                  <span>Continue with Google</span>
+                </button>
+              )}
             </div>
 
             <p className="auth-toggle-note">

@@ -6,6 +6,7 @@ const config = {
   port: Number(process.env.PORT || 4000),
   mongoUri: process.env.MONGODB_URI,
   webOrigin: process.env.WEB_ORIGIN || "http://localhost:3000",
+  googleClientId: process.env.GOOGLE_CLIENT_ID || "",
   nodeEnv: process.env.NODE_ENV || "development",
   brevoApiKey: process.env.BREVO_API_KEY || "",
   brevoSenderEmail:

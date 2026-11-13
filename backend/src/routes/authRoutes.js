@@ -442,14 +442,26 @@ router.post("/signup/verify-otp", async (req, res) => {
 // -----------------------------------------------------------------------------
 router.post("/social", async (req, res) => {
   try {
-    const { name, email, provider } = req.body;
-    const cleanEmail = (
-      email ||
-      `${provider.toLowerCase()}_user_${Date.now()}@healthwithherbal.local`
-    ).toLowerCase();
-    const cleanName = (name || `${provider} Customer`).trim();
+    const { provider, idToken } = req.body;
+    if (provider !== "google" || !idToken || !config.googleClientId) {
+      return res.status(400).json({ error: "Google sign-in is not configured or the credential is missing." });
+    }
+
+    const tokenResponse = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`);
+    if (!tokenResponse.ok) return res.status(401).json({ error: "Google credential is invalid or expired. Please try again." });
+    const claims = await tokenResponse.json();
+    if (claims.aud !== config.googleClientId || claims.iss !== "https://accounts.google.com" || claims.email_verified !== "true" || !claims.email) {
+      return res.status(401).json({ error: "Google account could not be verified." });
+    }
+
+    const cleanEmail = claims.email.toLowerCase();
+    const cleanName = (claims.name || claims.given_name || "Google Customer").trim();
 
     let user = await User.findOne({ email: cleanEmail });
+
+    if (user && !user.isActive) {
+      return res.status(403).json({ error: "This account is unavailable. Please contact support." });
+    }
 
     if (!user) {
       user = await User.create({

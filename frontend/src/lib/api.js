@@ -244,11 +244,11 @@ export async function verifySignupOtp({ name, email, phone, otp }) {
   return { ...data.user, sessionToken: data.token };
 }
 
-export async function socialLogin(payload) {
+export async function socialLogin(idToken) {
   const response = await fetch(`${API_BASE_URL}/auth/social`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ provider: "google", idToken }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
