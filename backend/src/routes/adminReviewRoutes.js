@@ -1,10 +1,17 @@
 const { z } = require("zod");
+const { REVIEW_STATUSES } = require("../constants/statuses");
+const { validate } = require("../middleware/validate");
+const { validateObjectId } = require("../middleware/validateObjectId");
+
+const reviewStatusSchema = z.object({
+  isApproved: z.coerce.boolean().optional(),
+  status: z.enum(REVIEW_STATUSES).optional(),
+});
 
 function registerAdminReviewRoutes({
   router,
   asyncHandler,
   ProductReview,
-  validId,
   invalid,
   syncProductRating,
 }) {
@@ -23,22 +30,16 @@ function registerAdminReviewRoutes({
   );
   router.patch(
     "/reviews/:id",
+    validateObjectId("id", { message: "Invalid review ID." }),
+    validate(reviewStatusSchema, { onInvalid: invalid }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid review ID." });
-      const parsed = z
-        .object({
-          isApproved: z.coerce.boolean().optional(),
-          status: z.enum(["pending", "approved", "rejected"]).optional(),
-        })
-        .safeParse(req.body);
-      if (!parsed.success) return invalid(res, parsed);
-
-      const updateData = { ...parsed.data };
+      const updateData = { ...req.validatedBody };
       if (updateData.status) {
-        updateData.isApproved = updateData.status === "approved";
+        updateData.isApproved = updateData.status === REVIEW_STATUSES[1];
       } else if (updateData.isApproved !== undefined) {
-        updateData.status = updateData.isApproved ? "approved" : "rejected";
+        updateData.status = updateData.isApproved
+          ? REVIEW_STATUSES[1]
+          : REVIEW_STATUSES[2];
       }
 
       const item = await ProductReview.findByIdAndUpdate(
@@ -58,9 +59,8 @@ function registerAdminReviewRoutes({
   );
   router.delete(
     "/reviews/:id",
+    validateObjectId("id", { message: "Invalid review ID." }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid review ID." });
       const item = await ProductReview.findByIdAndDelete(req.params.id);
       if (!item) return res.status(404).json({ error: "Review not found." });
       if (item.productId) {

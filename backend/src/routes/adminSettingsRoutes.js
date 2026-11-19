@@ -3,6 +3,7 @@ const path = require("node:path");
 const multer = require("multer");
 const mongoose = require("mongoose");
 const StoreSetting = require("../models/StoreSetting");
+const config = require("../config");
 const {
   isCloudinaryConfigured,
   uploadBufferToCloudinary,
@@ -148,7 +149,7 @@ function registerAdminSettingsRoutes({
         });
       }
 
-      const folder = process.env.CLOUDINARY_FOLDER || "healthwithherbal";
+      const folder = config.cloudinaryFolder;
       const usedNames = new Map();
 
       const uploadPromises = files.map((file) => {
@@ -220,7 +221,7 @@ function registerAdminSettingsRoutes({
       if (!configured) {
         return res.json({
           configured: false,
-          cloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
+          cloudName: config.cloudinaryCloudName,
           message: "Cloudinary credentials are not configured in backend/.env",
         });
       }
@@ -229,8 +230,8 @@ function registerAdminSettingsRoutes({
         res.json({
           configured: true,
           connected: true,
-          cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-          folder: process.env.CLOUDINARY_FOLDER || "healthwithherbal",
+          cloudName: config.cloudinaryCloudName,
+          folder: config.cloudinaryFolder,
           message: "Cloudinary credentials are valid and connection is active.",
         });
       } catch (err) {

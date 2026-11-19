@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { REVIEW_STATUSES } = require("../constants/statuses");
 const schema = new mongoose.Schema(
   {
     productId: {
@@ -20,8 +21,8 @@ const schema = new mongoose.Schema(
     comment: { type: String, required: true },
     status: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
+      enum: REVIEW_STATUSES,
+      default: REVIEW_STATUSES[0],
       index: true,
     },
     isApproved: { type: Boolean, default: false, index: true },

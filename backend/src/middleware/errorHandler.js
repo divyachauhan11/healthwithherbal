@@ -1,5 +1,18 @@
+const { AppError } = require("../utils/appError");
+
 function errorHandler(error, req, res, next) {
   if (res.headersSent) return next(error);
+
+  if (error instanceof AppError) {
+    return res.status(error.statusCode).json({ error: error.message });
+  }
+
+  if (error.name === "ZodError") {
+    return res.status(400).json({
+      error: "Please check the submitted fields.",
+      details: error.flatten().fieldErrors,
+    });
+  }
 
   if (error.code === 11000) {
     if (
@@ -23,7 +36,7 @@ function errorHandler(error, req, res, next) {
     req.method === "POST" &&
     String(req.originalUrl || "").split("?")[0] === "/api/admin/auth/login";
   const canShowAdminLoginError =
-    isAdminLogin && process.env.NODE_ENV !== "production" && status >= 500;
+    isAdminLogin && require("../config").nodeEnv !== "production" && status >= 500;
   const safeDiagnostic = String(error.message || "")
     .replace(/(mongodb(?:\+srv)?:\/\/)[^@\s]+@/gi, "$1[redacted]@");
   const message = status >= 500

@@ -1,4 +1,8 @@
-function registerAdminCustomerRoutes({ router, asyncHandler, Order, User, Payment, Address, validId }) {
+const { USER_ROLES } = require("../constants/roles");
+const { PAYMENT_STATUSES } = require("../constants/statuses");
+const { validateObjectId } = require("../middleware/validateObjectId");
+
+function registerAdminCustomerRoutes({ router, asyncHandler, Order, User, Payment, Address }) {
   router.get(
     "/payments",
     asyncHandler(async (_req, res) => {
@@ -23,8 +27,10 @@ function registerAdminCustomerRoutes({ router, asyncHandler, Order, User, Paymen
     }),
   );
 
-  router.patch("/payments/:id", asyncHandler(async (req, res) => {
-    if (!validId(req.params.id)) return res.status(400).json({ error: "Invalid payment ID." });
+  router.patch(
+    "/payments/:id",
+    validateObjectId("id", { message: "Invalid payment ID." }),
+    asyncHandler(async (req, res) => {
     const { method, gateway = "", gatewayTxnId = "", amount, currency = "INR", status, paidAt = null } = req.body || {};
     const numericAmount = Number(amount);
     const paidDate = paidAt ? new Date(paidAt) : null;
@@ -34,7 +40,7 @@ function registerAdminCustomerRoutes({ router, asyncHandler, Order, User, Paymen
       typeof gatewayTxnId !== "string" || gatewayTxnId.length > 160 ||
       !Number.isFinite(numericAmount) || numericAmount < 0 || numericAmount > 100000000 ||
       typeof currency !== "string" || !/^[A-Z]{3}$/.test(currency) ||
-      !["pending", "authorized", "paid", "failed", "refunded"].includes(status) ||
+      !PAYMENT_STATUSES.includes(status) ||
       (paidAt && Number.isNaN(paidDate.getTime()))
     ) return res.status(400).json({ error: "Enter valid payment details." });
     const payment = await Payment.findByIdAndUpdate(req.params.id, {
@@ -67,7 +73,7 @@ function registerAdminCustomerRoutes({ router, asyncHandler, Order, User, Paymen
           { $sort: { lastOrder: -1 } },
           { $limit: 1000 },
         ]),
-        User.find({ role: "customer" }).select("name email phone createdAt isActive").lean(),
+        User.find({ role: USER_ROLES.CUSTOMER }).select("name email phone createdAt isActive").lean(),
       ]);
 
       const customersByEmail = new Map();
@@ -122,7 +128,7 @@ function registerAdminCustomerRoutes({ router, asyncHandler, Order, User, Paymen
       }
 
       const customer = await User.findOneAndUpdate(
-        { email, role: "customer" },
+        { email, role: USER_ROLES.CUSTOMER },
         { $set: { isActive: req.body.isActive } },
         { new: true, runValidators: true },
       ).select("name email isActive").lean();
@@ -140,7 +146,7 @@ function registerAdminCustomerRoutes({ router, asyncHandler, Order, User, Paymen
       }
 
       const [account, orders] = await Promise.all([
-        User.findOne({ email, role: "customer" })
+        User.findOne({ email, role: USER_ROLES.CUSTOMER })
           .select("name email phone createdAt")
           .lean(),
         Order.find({ "customer.email": email }).sort({ createdAt: -1 }).lean(),

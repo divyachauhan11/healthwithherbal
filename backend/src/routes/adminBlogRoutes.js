@@ -1,4 +1,9 @@
 const { attachBlogMetrics } = require("../utils/blogMetrics");
+const { slugify } = require("../utils/string");
+const { ADMIN_ROLES } = require("../constants/roles");
+const { BLOG_POST_STATUSES, REVIEW_STATUSES } = require("../constants/statuses");
+const { validate } = require("../middleware/validate");
+const { validateObjectId } = require("../middleware/validateObjectId");
 
 function registerAdminBlogRoutes({
   router,
@@ -9,9 +14,7 @@ function registerAdminBlogRoutes({
   BlogView,
   blogSchema,
   invalid,
-  validId,
   User,
-  slugify,
 }) {
   router.get(
     "/blogs",
@@ -22,12 +25,12 @@ function registerAdminBlogRoutes({
   );
   router.post(
     "/blogs",
+    validate(blogSchema, { onInvalid: invalid }),
     asyncHandler(async (req, res) => {
-      const parsed = blogSchema.safeParse(req.body);
-      if (!parsed.success) return invalid(res, parsed);
+      const data = req.validatedBody;
       const author = await User.findOne({
         email: req.admin.email,
-        role: { $in: ["admin", "employee"] },
+        role: { $in: ADMIN_ROLES },
       })
         .select("_id")
         .lean();
@@ -39,43 +42,40 @@ function registerAdminBlogRoutes({
               "Create an admin user in the users collection before publishing blog posts.",
           });
       const item = await BlogPost.create({
-        ...parsed.data,
-        category: parsed.data.category || parsed.data.tags?.[0] || "Wellness",
+        ...data,
+        category: data.category || data.tags?.[0] || "Wellness",
         authorId: author._id,
-        slug: slugify(parsed.data.slug || parsed.data.title),
-        publishedAt: parsed.data.status === "published" ? new Date() : undefined,
+        slug: slugify(data.slug || data.title),
+        publishedAt: data.status === BLOG_POST_STATUSES[1] ? new Date() : undefined,
       });
       res.status(201).json({ item });
     }),
   );
   router.put(
     "/blogs/:id",
+    validateObjectId("id", { message: "Invalid blog post ID." }),
+    validate(blogSchema, { onInvalid: invalid }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid blog post ID." });
-      const parsed = blogSchema.safeParse(req.body);
-      if (!parsed.success) return invalid(res, parsed);
+      const data = req.validatedBody;
 
       const item = await BlogPost.findById(req.params.id);
       if (!item) return res.status(404).json({ error: "Blog post not found." });
 
       item.set({
-        ...parsed.data,
+        ...data,
         category:
-          parsed.data.category || parsed.data.tags?.[0] || item.category || "Wellness",
+          data.category || data.tags?.[0] || item.category || "Wellness",
       });
       item.publishedAt =
-        parsed.data.status === "published" ? item.publishedAt || new Date() : null;
+        data.status === BLOG_POST_STATUSES[1] ? item.publishedAt || new Date() : null;
       await item.save();
       res.json({ item });
     }),
   );
   router.delete(
     "/blogs/:id",
+    validateObjectId("id", { message: "Invalid blog post ID." }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid blog post ID." });
-
       const item = await BlogPost.findById(req.params.id);
       if (!item) return res.status(404).json({ error: "Blog post not found." });
 
@@ -92,9 +92,8 @@ function registerAdminBlogRoutes({
 
   router.get(
     "/blogs/:id/comments",
+    validateObjectId("id", { message: "Invalid blog post ID." }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid blog post ID." });
       const exists = await BlogPost.exists({ _id: req.params.id });
       if (!exists) return res.status(404).json({ error: "Blog post not found." });
       const items = await BlogComment.find({ postId: req.params.id })
@@ -107,11 +106,12 @@ function registerAdminBlogRoutes({
 
   router.patch(
     "/blogs/:id/comments/:commentId",
+    validateObjectId(["id", "commentId"], {
+      message: "Invalid blog post or comment ID.",
+    }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id) || !validId(req.params.commentId))
-        return res.status(400).json({ error: "Invalid blog post or comment ID." });
       const status = req.body?.status;
-      if (!["approved", "rejected", "pending"].includes(status))
+      if (!REVIEW_STATUSES.includes(status))
         return res.status(400).json({ error: "Choose a valid comment status." });
       const comment = await BlogComment.findOneAndUpdate(
         { _id: req.params.commentId, postId: req.params.id },
@@ -124,9 +124,10 @@ function registerAdminBlogRoutes({
   );
   router.delete(
     "/blogs/:id/comments/:commentId",
+    validateObjectId(["id", "commentId"], {
+      message: "Invalid blog post or comment ID.",
+    }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id) || !validId(req.params.commentId))
-        return res.status(400).json({ error: "Invalid blog post or comment ID." });
       const comment = await BlogComment.findOneAndDelete({
         _id: req.params.commentId,
         postId: req.params.id,

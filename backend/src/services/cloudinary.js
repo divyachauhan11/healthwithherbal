@@ -1,4 +1,5 @@
 const cloudinary = require("cloudinary").v2;
+const config = require("../config");
 const placeholderValues = new Set([
   "your_cloudinary_cloud_name",
   "your_cloudinary_api_key",
@@ -11,9 +12,9 @@ const placeholderValues = new Set([
 
 function getCloudinaryCredentials() {
   return {
-    cloud_name: (process.env.CLOUDINARY_CLOUD_NAME || "").trim(),
-    api_key: (process.env.CLOUDINARY_API_KEY || "").trim(),
-    api_secret: (process.env.CLOUDINARY_API_SECRET || "").trim(),
+    cloud_name: config.cloudinaryCloudName.trim(),
+    api_key: config.cloudinaryApiKey.trim(),
+    api_secret: config.cloudinaryApiSecret.trim(),
   };
 }
 
@@ -70,7 +71,7 @@ function uploadBufferToCloudinary(buffer, options = {}) {
     configureCloudinary();
 
     const uploadOptions = {
-      folder: process.env.CLOUDINARY_FOLDER || "healthwithherbal",
+      folder: config.cloudinaryFolder,
       resource_type: "image",
       fetch_format: "auto",
       quality: "auto",
@@ -110,7 +111,7 @@ async function uploadFilePathToCloudinary(filePath, options = {}) {
   configureCloudinary();
 
   const uploadOptions = {
-    folder: process.env.CLOUDINARY_FOLDER || "healthwithherbal",
+    folder: config.cloudinaryFolder,
     resource_type: "image",
     fetch_format: "auto",
     quality: "auto",

@@ -1,16 +1,9 @@
-const crypto = require("node:crypto");
 const User = require("../models/User");
-
-function secret() {
-  return process.env.ADMIN_SESSION_SECRET || "";
-}
-
-function sign(payload) {
-  return crypto.createHmac("sha256", secret()).update(payload).digest("base64url");
-}
+const config = require("../config");
+const { signHmac, verifyHmac } = require("../utils/crypto");
 
 function createUserToken(userId) {
-  if (secret().length < 32) {
+  if (config.adminSessionSecret.length < 32) {
     throw new Error(
       "Set an ADMIN_SESSION_SECRET of at least 32 characters in the backend environment first.",
     );
@@ -21,11 +14,11 @@ function createUserToken(userId) {
       exp: Date.now() + 30 * 24 * 60 * 60 * 1000,
     }),
   ).toString("base64url");
-  return `${payload}.${sign(payload)}`;
+  return `${payload}.${signHmac(payload, config.adminSessionSecret)}`;
 }
 
 async function requireUserSession(req, res, next) {
-  const key = secret();
+  const key = config.adminSessionSecret;
   if (key.length < 32) {
     return res
       .status(503)
@@ -38,14 +31,10 @@ async function requireUserSession(req, res, next) {
       .json({ error: "Please sign in to access your wishlist." });
   }
   const [payload, signature] = token.split(".");
-  const expected = payload ? sign(payload) : "";
-  const suppliedBuffer = Buffer.from(signature || "");
-  const expectedBuffer = Buffer.from(expected);
   if (
     !payload ||
     !signature ||
-    suppliedBuffer.length !== expectedBuffer.length ||
-    !crypto.timingSafeEqual(suppliedBuffer, expectedBuffer)
+    !verifyHmac(payload, signature, key)
   ) {
     return res
       .status(401)

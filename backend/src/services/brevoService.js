@@ -1,4 +1,5 @@
 const config = require("../config");
+const { escapeHtml } = require("../utils/string");
 
 /**
  * Brevo (Sendinblue) Transactional Email Service
@@ -350,8 +351,63 @@ The Health with Herbal Family
   });
 }
 
+/**
+ * Builds the existing HTML body for an admin password-reset email.
+ * @param {{ resetUrl: string }} data Reset link data.
+ * @returns {string} HTML email body.
+ */
+function buildPasswordResetEmailTemplate({ resetUrl }) {
+  return `<p>A password reset was requested for your admin account.</p><p><a href="${escapeHtml(resetUrl)}">Reset your password</a></p><p>This link expires in 30 minutes. If you did not request this, you can ignore this email.</p>`;
+}
+
+/**
+ * Builds the existing HTML body for a website contact message.
+ * @param {{ name: string, email: string, topic: string, message: string }} data Contact message fields.
+ * @returns {string} HTML email body.
+ */
+function buildContactEmailTemplate({ name, email, topic, message }) {
+  return `
+    <h2>New website contact message</h2>
+    <p><strong>Name:</strong> ${escapeHtml(name)}</p>
+    <p><strong>Email:</strong> ${escapeHtml(email)}</p>
+    <p><strong>Enquiry type:</strong> ${escapeHtml(topic)}</p>
+    <p><strong>Message:</strong></p>
+    <p style="white-space:pre-wrap">${escapeHtml(message)}</p>
+  `;
+}
+
+/**
+ * Builds the existing HTML body for a return or exchange request email.
+ * @param {object} data Prepared return/exchange email details.
+ * @returns {string} HTML email body.
+ */
+function buildReturnExchangeEmailTemplate({
+  requestType,
+  order,
+  requestedProduct,
+  customerName,
+  email,
+  shipping,
+  address,
+  reason,
+  photoUrls,
+}) {
+  const phone = shipping.phone || order.customer?.phone || "Not provided";
+  const couponHtml = order.couponCode
+    ? `<p><strong>Coupon:</strong> ${escapeHtml(order.couponCode)}</p>`
+    : "";
+  const photosHtml = photoUrls.length
+    ? `<p><strong>Photos:</strong></p><ul>${photoUrls.map((url) => `<li><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></li>`).join("")}</ul>`
+    : "";
+
+  return `<h2>New ${escapeHtml(requestType.toLowerCase())} request</h2><p><strong>Order:</strong> ${escapeHtml(order.orderNumber)} (${escapeHtml(order.status)})</p><p><strong>Requested product:</strong> ${escapeHtml(requestedProduct)}</p><p><strong>Customer:</strong> ${escapeHtml(customerName)}</p><p><strong>Email:</strong> ${escapeHtml(email)}</p><p><strong>Phone:</strong> ${escapeHtml(phone)}</p><p><strong>Delivery address:</strong> ${escapeHtml(address)}</p><p><strong>Order total:</strong> ${escapeHtml(`${order.total} ${order.currency || "INR"}`)}</p>${couponHtml}<p><strong>Reason:</strong><br>${escapeHtml(reason || "Not provided")}</p>${photosHtml}`;
+}
+
 module.exports = {
   sendBrevoEmail,
   sendOtpEmail,
   sendWelcomeEmail,
+  buildPasswordResetEmailTemplate,
+  buildContactEmailTemplate,
+  buildReturnExchangeEmailTemplate,
 };

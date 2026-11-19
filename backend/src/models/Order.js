@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { ORDER_STATUSES, PAYMENT_METHODS } = require("../constants/statuses");
 
 const orderItemSchema = new mongoose.Schema(
   {
@@ -66,13 +67,13 @@ const orderSchema = new mongoose.Schema(
     currency: { type: String, default: "INR", immutable: true },
     paymentMethod: {
       type: String,
-      enum: ["cash_on_delivery"],
-      default: "cash_on_delivery",
+      enum: PAYMENT_METHODS,
+      default: PAYMENT_METHODS[0],
     },
     status: {
       type: String,
-      enum: ["placed", "processing", "shipped", "delivered", "cancelled"],
-      default: "placed",
+      enum: ORDER_STATUSES,
+      default: ORDER_STATUSES[0],
       index: true,
     },
     trackingId: { type: String, trim: true },

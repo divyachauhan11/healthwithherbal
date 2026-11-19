@@ -8,6 +8,10 @@ const config = {
   webOrigin: process.env.WEB_ORIGIN || "http://localhost:3000",
   googleClientId: process.env.GOOGLE_CLIENT_ID || "",
   nodeEnv: process.env.NODE_ENV || "development",
+  adminSessionSecret: process.env.ADMIN_SESSION_SECRET || "",
+  adminEmail: process.env.ADMIN_EMAIL || "",
+  adminPassword: process.env.ADMIN_PASSWORD || "",
+  storeTimeZone: process.env.STORE_TIME_ZONE || "Asia/Kolkata",
   brevoApiKey: process.env.BREVO_API_KEY || "",
   brevoSenderEmail:
     process.env.BREVO_SENDER_EMAIL || "support@healthwithherbal.com",

@@ -1,26 +1,15 @@
-const User = require("../models/User");
+const { ADMIN_ROLES } = require("../constants/roles");
+const { ADMIN_PAGE_BY_PATH } = require("../constants/pages");
 const portalPageForPath = (path) => {
   const section = path.split("/").filter(Boolean)[0];
-  const pages = {
-    dashboard: "Dashboard", products: "Products", "low-stock": "Low Stock",
-    categories: "Categories", brands: "Brands", coupons: "Coupons", payments: "Payments",
-    reviews: "Reviews", orders: "Orders", "return-exchange": "Returns & Exchanges", customers: "Customers", blogs: "Blogs",
-    users: "Users", settings: "Settings", profile: "Profile",
-  };
-  return pages[section] || null;
+  return ADMIN_PAGE_BY_PATH[section] || null;
 };
 const requirePageAccess = async (req, res, next) => {
   try {
     if (req.admin.userId) {
-      const staff = await User.findById(req.admin.userId)
-        .select("role isActive pageAccess email")
-        .lean();
-      if (!staff || !staff.isActive || !["admin", "employee"].includes(staff.role)) {
+      if (!req.admin.isActive || !ADMIN_ROLES.includes(req.admin.role)) {
         return res.status(401).json({ error: "This admin account is no longer active. Please sign in again." });
       }
-      req.admin.role = staff.role;
-      req.admin.email = staff.email;
-      req.admin.pageAccess = staff.pageAccess || [];
     }
     const page = portalPageForPath(req.path);
     // The notification feed filters each event to the pages granted to this staff account.

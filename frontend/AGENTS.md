@@ -1,9 +1,38 @@
-<!-- BEGIN:nextjs-agent-rules -->
+# AGENTS.md: HealthWithHerbal
 
-## This is NOT the Next.js you know
+Stack: Next.js 15 / React 19 (frontend, JS/JSX), Node.js + Express 4 +
+Mongoose 8 + Zod (backend, CommonJS), MongoDB, Cloudinary, Brevo.
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+## Shared code locations (reuse BEFORE writing new code)
 
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+Backend:
 
-<!-- END:nextjs-agent-rules -->
+- backend/src/utils/ generic helpers
+- backend/src/middleware/ asyncHandler, errorHandler, auth/session, validate
+- backend/src/services/ brevoService, cloudinary, and business logic
+- backend/src/config.js single source for env/config/constants
+  Frontend:
+- frontend/src/lib/api-client.js the ONE HTTP client (api.js and
+  admin-api.js should become thin wrappers over it)
+- frontend/src/hooks/ shared hooks
+- frontend/src/components/shared/ primitives.jsx, icons.jsx
+- frontend/src/components/admin/global/ and tables/ for admin UI
+- frontend/src/components/pages/modals/ for storefront modals
+
+## Rules
+
+- Never duplicate logic. If the same logic appears in 2+ places, extract it.
+- Utilities are generic, single-purpose, documented with JSDoc.
+- Do not change API routes, response shapes, DB schemas, or UI appearance.
+- Do not add dependencies without asking. Prefer removing unused ones.
+- Keep backend CommonJS and frontend JS/JSX. Do not convert to TypeScript.
+- Follow the existing file naming already used in each folder.
+- Never read, print, or commit .env / .env.local contents.
+- Do not touch backend/uploads or backend/data.
+
+## Verification (after every change set)
+
+- Frontend: npm run lint and npm run build (in /frontend)
+- Backend: node --check on changed files, and start with npm run dev
+  to confirm the server boots
+- Report any failing command honestly. Never hide errors.

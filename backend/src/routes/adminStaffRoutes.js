@@ -1,10 +1,7 @@
-const crypto = require("node:crypto");
-
-function hashStaffPassword(password) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `scrypt$${salt}$${hash}`;
-}
+const { hashPassword } = require("../utils/crypto");
+const { USER_ROLES, ADMIN_ROLES } = require("../constants/roles");
+const { validate } = require("../middleware/validate");
+const { validateObjectId } = require("../middleware/validateObjectId");
 
 function registerAdminStaffRoutes({
   router,
@@ -12,14 +9,13 @@ function registerAdminStaffRoutes({
   User,
   staffUserSchema,
   staffUserUpdateSchema,
-  validId,
   invalid,
 }) {
   router.get(
     "/users",
     asyncHandler(async (_req, res) =>
       res.json({
-        items: await User.find({ role: { $in: ["admin", "employee"] } })
+        items: await User.find({ role: { $in: ADMIN_ROLES } })
           .sort({ createdAt: -1 })
           .limit(500)
           .lean(),
@@ -29,14 +25,13 @@ function registerAdminStaffRoutes({
 
   router.post(
     "/users",
+    validate(staffUserSchema, { onInvalid: invalid }),
     asyncHandler(async (req, res) => {
-      const parsed = staffUserSchema.safeParse(req.body);
-      if (!parsed.success) return invalid(res, parsed);
-      const data = parsed.data;
+      const data = req.validatedBody;
       const normalizedEmail = data.email.toLowerCase();
       const existingAccount = await User.exists({
         email: normalizedEmail,
-        role: { $in: ["admin", "employee"] },
+        role: { $in: ADMIN_ROLES },
       });
       if (existingAccount) {
         return res.status(409).json({
@@ -49,7 +44,7 @@ function registerAdminStaffRoutes({
         role: data.role,
         isActive: data.isActive,
         pageAccess: data.pageAccess,
-        passwordHash: hashStaffPassword(data.password),
+        passwordHash: hashPassword(data.password),
       });
       const safeItem = item.toObject();
       delete safeItem.passwordHash;
@@ -59,12 +54,11 @@ function registerAdminStaffRoutes({
 
   router.put(
     "/users/:id",
+    validateObjectId("id", { message: "Invalid user ID." }),
+    validate(staffUserUpdateSchema, { onInvalid: invalid }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id)) return res.status(400).json({ error: "Invalid user ID." });
-      const parsed = staffUserUpdateSchema.safeParse(req.body);
-      if (!parsed.success) return invalid(res, parsed);
-      const data = parsed.data;
-      const item = await User.findOne({ _id: req.params.id, role: { $in: ["admin", "employee"] } }).select("+passwordHash");
+      const data = req.validatedBody;
+      const item = await User.findOne({ _id: req.params.id, role: { $in: ADMIN_ROLES } }).select("+passwordHash");
       if (!item) return res.status(404).json({ error: "User not found." });
       const currentAccess = [...(item.pageAccess || [])].sort();
       const nextAccess = [...data.pageAccess].sort();
@@ -82,7 +76,7 @@ function registerAdminStaffRoutes({
       item.role = data.role;
       item.isActive = data.isActive;
       item.pageAccess = data.pageAccess;
-      if (data.password) item.passwordHash = hashStaffPassword(data.password);
+      if (data.password) item.passwordHash = hashPassword(data.password);
       if (invalidatesSessions) item.authVersion = (Number(item.authVersion) || 0) + 1;
       await item.save();
       const safeItem = item.toObject();
@@ -93,14 +87,14 @@ function registerAdminStaffRoutes({
 
   router.delete(
     "/users/:id",
+    validateObjectId("id", { message: "Invalid user ID." }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id)) return res.status(400).json({ error: "Invalid user ID." });
-      const item = await User.findOne({ _id: req.params.id, role: { $in: ["admin", "employee"] } });
+      const item = await User.findOne({ _id: req.params.id, role: { $in: ADMIN_ROLES } });
       if (!item) return res.status(404).json({ error: "User not found." });
       if (item.email.toLowerCase() === req.admin.email.toLowerCase()) {
         return res.status(400).json({ error: "You cannot delete the account you are currently signed in with." });
       }
-      if (item.role === "admin" && await User.countDocuments({ role: "admin", isActive: true }) <= 1) {
+      if (item.role === USER_ROLES.ADMIN && await User.countDocuments({ role: USER_ROLES.ADMIN, isActive: true }) <= 1) {
         return res.status(400).json({ error: "The last active admin account cannot be deleted." });
       }
       await item.deleteOne();

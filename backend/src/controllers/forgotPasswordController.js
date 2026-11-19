@@ -1,14 +1,12 @@
 const crypto = require("node:crypto");
 const config = require("../config");
-const brevoService = require("../services/brevoService");
+const {
+  sendBrevoEmail,
+  buildPasswordResetEmailTemplate,
+} = require("../services/brevoService");
+const { ADMIN_ROLES } = require("../constants/roles");
 
 const GENERIC_MESSAGE = "If an active admin account exists for that email, password reset instructions will be sent shortly.";
-
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, (character) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
-  })[character]);
-}
 
 function createForgotPasswordController({ User }) {
   return async function forgotPasswordController(req, res) {
@@ -20,7 +18,7 @@ function createForgotPasswordController({ User }) {
     try {
       const user = await User.findOne({
         email,
-        role: { $in: ["admin", "employee"] },
+        role: { $in: ADMIN_ROLES },
         isActive: true,
       });
 
@@ -38,9 +36,11 @@ function createForgotPasswordController({ User }) {
         resetUrl.searchParams.set("email", email);
         const subject = "Reset your Health with Herbal admin password";
         const textContent = `A password reset was requested for your admin account. Open this link within 30 minutes to continue: ${resetUrl.toString()}\n\nIf you did not request this, you can ignore this email.`;
-        const htmlContent = `<p>A password reset was requested for your admin account.</p><p><a href="${escapeHtml(resetUrl.toString())}">Reset your password</a></p><p>This link expires in 30 minutes. If you did not request this, you can ignore this email.</p>`;
+        const htmlContent = buildPasswordResetEmailTemplate({
+          resetUrl: resetUrl.toString(),
+        });
 
-        await brevoService.sendBrevoEmail({
+        await sendBrevoEmail({
           toEmail: email,
           toName: user.name,
           subject,

@@ -1,4 +1,9 @@
 const escapeRegex = require("../utils/escapeRegex");
+const { slugify } = require("../utils/string");
+const { validate } = require("../middleware/validate");
+const { validateObjectId } = require("../middleware/validateObjectId");
+
+const inventoryService = require("../services/inventoryService");
 
 function registerAdminProductRoutes({
   router,
@@ -11,7 +16,6 @@ function registerAdminProductRoutes({
   productSchema,
   invalid,
   Brand,
-  slugify,
 }) {
   router.get(
     "/products",
@@ -105,9 +109,8 @@ function registerAdminProductRoutes({
 
   router.patch(
     "/products/:id/stock",
+    validateObjectId("id", { message: "Invalid product ID." }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid product ID." });
       const stockQty = Number(req.body.stockQty);
       if (isNaN(stockQty) || stockQty < 0)
         return res
@@ -117,17 +120,16 @@ function registerAdminProductRoutes({
         .select("stockQty")
         .lean();
       if (!before) return res.status(404).json({ error: "Product not found." });
-      const product = await Product.findByIdAndUpdate(
-        req.params.id,
-        { stockQty },
-        { new: true },
-      );
-      await InventoryLog.create({
-        productId: product._id,
-        type: stockQty > before.stockQty ? "restock" : "adjustment",
-        quantityChange: stockQty - before.stockQty,
-        stockBefore: before.stockQty,
-        stockAfter: stockQty,
+      const product = await inventoryService.setAbsoluteStockAndLog({
+        updateProduct: () =>
+          Product.findByIdAndUpdate(
+            req.params.id,
+            { stockQty },
+            { new: true },
+          ),
+        InventoryLog,
+        stockQty,
+        before,
         reason: req.body.reason || "Admin low stock page quick restock",
       });
       res.json({ item: product });
@@ -136,9 +138,8 @@ function registerAdminProductRoutes({
 
   router.patch(
     "/products/:id/badge",
+    validateObjectId("id", { message: "Invalid product ID." }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid product ID." });
       const { badge } = req.body || {};
       const cleanBadge = typeof badge === "string" && badge.trim() ? badge.trim() : null;
       const product = await Product.findByIdAndUpdate(
@@ -152,13 +153,12 @@ function registerAdminProductRoutes({
   );
   router.post(
     "/products",
+    validate(productSchema, { onInvalid: invalid }),
     asyncHandler(async (req, res) => {
-      const parsed = productSchema.safeParse(req.body);
-      if (!parsed.success) return invalid(res, parsed);
       const legacyId =
         (await Product.findOne().sort({ legacyId: -1 }).select("legacyId").lean())
           ?.legacyId || 0;
-      const data = parsed.data;
+      const data = req.validatedBody;
       const images =
         Array.isArray(data.images) && data.images.length > 0
           ? data.images
@@ -195,12 +195,10 @@ function registerAdminProductRoutes({
   );
   router.put(
     "/products/:id",
+    validateObjectId("id", { message: "Invalid product ID." }),
+    validate(productSchema, { onInvalid: invalid }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid product ID." });
-      const parsed = productSchema.safeParse(req.body);
-      if (!parsed.success) return invalid(res, parsed);
-      const data = parsed.data;
+      const data = req.validatedBody;
       const images =
         Array.isArray(data.images) && data.images.length > 0
           ? data.images
@@ -230,15 +228,11 @@ function registerAdminProductRoutes({
         runValidators: true,
       });
       if (!product) return res.status(404).json({ error: "Product not found." });
-      if (before.stockQty !== product.stockQty)
-        await InventoryLog.create({
-          productId: product._id,
-          type: product.stockQty > before.stockQty ? "restock" : "adjustment",
-          quantityChange: product.stockQty - before.stockQty,
-          stockBefore: before.stockQty,
-          stockAfter: product.stockQty,
-          reason: "Admin inventory update",
-        });
+      await inventoryService.logEditedProductStockChange({
+        InventoryLog,
+        before,
+        product,
+      });
       await ProductCategory.deleteMany({ productId: product._id });
       if (category)
         await ProductCategory.create({
@@ -250,9 +244,8 @@ function registerAdminProductRoutes({
   );
   router.delete(
     "/products/:id",
+    validateObjectId("id", { message: "Invalid product ID." }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid product ID." });
       const product = await Product.findByIdAndDelete(req.params.id);
       if (!product) return res.status(404).json({ error: "Product not found." });
       await ProductCategory.deleteMany({ productId: req.params.id });
@@ -262,9 +255,8 @@ function registerAdminProductRoutes({
 
   router.patch(
     "/products/:id/toggle-active",
+    validateObjectId("id", { message: "Invalid product ID." }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid product ID." });
       const current = await Product.findById(req.params.id);
       if (!current) return res.status(404).json({ error: "Product not found." });
       const nextActive =
@@ -279,9 +271,8 @@ function registerAdminProductRoutes({
 
   router.patch(
     "/products/:id",
+    validateObjectId("id", { message: "Invalid product ID." }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid product ID." });
       const update = {};
       if (typeof req.body?.active === "boolean") {
         update.active = req.body.active;

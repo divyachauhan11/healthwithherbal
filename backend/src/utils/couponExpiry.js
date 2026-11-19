@@ -1,4 +1,6 @@
-const STORE_TIME_ZONE = process.env.STORE_TIME_ZONE || "Asia/Kolkata";
+const config = require("../config");
+
+const STORE_TIME_ZONE = config.storeTimeZone;
 
 function dateInStoreTimeZone(value) {
   const parts = new Intl.DateTimeFormat("en-CA", {

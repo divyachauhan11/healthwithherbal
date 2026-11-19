@@ -8,14 +8,27 @@ const OrderItem = require("../models/OrderItem");
 const Payment = require("../models/Payment");
 const InventoryLog = require("../models/InventoryLog");
 const StoreSetting = require("../models/StoreSetting");
+const Coupon = require("../models/Coupon");
 const ReturnExchangeRequest = require("../models/ReturnExchangeRequest");
 const { rateLimit } = require("express-rate-limit");
 const asyncHandler = require("../middleware/asyncHandler");
+const { validate } = require("../middleware/validate");
 const multer = require("multer");
 const { isCloudinaryConfigured, uploadBufferToCloudinary } = require("../services/cloudinary");
 const { isCouponExpired } = require("../utils/couponExpiry");
 const config = require("../config");
-const { sendBrevoEmail } = require("../services/brevoService");
+const pricingService = require("../services/pricingService");
+const inventoryService = require("../services/inventoryService");
+const {
+  ORDER_STATUSES,
+  PAYMENT_STATUSES,
+  RETURN_EXCHANGE_TYPES,
+  PAYMENT_METHODS,
+} = require("../constants/statuses");
+const {
+  sendBrevoEmail,
+  buildReturnExchangeEmailTemplate,
+} = require("../services/brevoService");
 
 const router = express.Router();
 const orderCreateLimit = rateLimit({
@@ -42,7 +55,7 @@ const returnEmailLimit = rateLimit({
 const returnEmailSchema = z.object({
   orderNumber: z.string().trim().min(1).max(40),
   email: z.string().trim().email().max(254),
-  type: z.enum(["return", "exchange"]),
+  type: z.enum(RETURN_EXCHANGE_TYPES),
   itemIndex: z.coerce.number().int().min(0).optional(),
   quantity: z.coerce.number().int().min(1).max(20).optional(),
   reason: z.string().trim().max(1000).optional().default(""),
@@ -50,8 +63,6 @@ const returnEmailSchema = z.object({
     try { return new URL(value).protocol === "https:"; } catch { return false; }
   })).max(4).optional().default([]),
 });
-const htmlEscapes = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
-const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => htmlEscapes[char]);
 const createOrderSchema = z.object({
   customer: z.object({
     firstName: z.string().trim().min(1).max(80),
@@ -83,21 +94,21 @@ const createOrderSchema = z.object({
 const returnExchangeSchema = z.object({
   orderNumber: z.string().trim().min(1).max(40),
   email: z.string().trim().email().max(254),
-  type: z.enum(["return", "exchange"]),
+  type: z.enum(RETURN_EXCHANGE_TYPES),
   itemIndex: z.coerce.number().int().min(0),
   quantity: z.coerce.number().int().min(1).max(20),
   reason: z.string().trim().min(5).max(1000),
 });
 
-router.post("/return-exchange", orderCreateLimit, asyncHandler(async (req, res) => {
+router.post("/return-exchange", orderCreateLimit, validate(returnExchangeSchema, {
+  onInvalid: (res) => res.status(400).json({ error: "Enter a valid order, email, item, quantity, and reason." }),
+}), asyncHandler(async (req, res) => {
   const featureSetting = await StoreSetting.findOne({ key: "returnExchangeEnabled" }).lean();
   if (featureSetting?.value === false) return res.status(403).json({ error: "Online return and exchange requests are currently unavailable. Please email our support team." });
-  const parsed = returnExchangeSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Enter a valid order, email, item, quantity, and reason." });
-  const { orderNumber, email, type, itemIndex, quantity, reason } = parsed.data;
+  const { orderNumber, email, type, itemIndex, quantity, reason } = req.validatedBody;
   const order = await Order.findOne({ orderNumber: orderNumber.trim(), "customer.email": email.trim().toLowerCase() });
   if (!order) return res.status(404).json({ error: "We couldn’t find an order matching that number and email." });
-  if (order.status !== "delivered") return res.status(400).json({ error: "Return and exchange requests are available after delivery." });
+  if (order.status !== ORDER_STATUSES[3]) return res.status(400).json({ error: "Return and exchange requests are available after delivery." });
   const item = order.items[itemIndex];
   if (!item || quantity > item.quantity) return res.status(400).json({ error: "Choose an item and quantity from this order." });
   const alreadyRequested = await ReturnExchangeRequest.findOne({
@@ -142,14 +153,14 @@ router.post("/return-exchange", orderCreateLimit, asyncHandler(async (req, res) 
   });
 }));
 
-router.post("/return-exchange/email", returnEmailLimit, asyncHandler(async (req, res) => {
-  const parsed = returnEmailSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Enter valid order and return request details." });
+router.post("/return-exchange/email", returnEmailLimit, validate(returnEmailSchema, {
+  onInvalid: (res) => res.status(400).json({ error: "Enter valid order and return request details." }),
+}), asyncHandler(async (req, res) => {
   if (!config.brevoApiKey || config.brevoApiKey === "your_brevo_api_key_here") {
     return res.status(503).json({ error: "Direct email sending is not configured. Please contact healthwithherbalindia@gmail.com." });
   }
 
-  const { orderNumber, email, type, itemIndex, quantity, reason, photoUrls } = parsed.data;
+  const { orderNumber, email, type, itemIndex, quantity, reason, photoUrls } = req.validatedBody;
   const cleanEmail = email.toLowerCase();
   const order = await Order.findOne({
     orderNumber,
@@ -160,7 +171,7 @@ router.post("/return-exchange/email", returnEmailLimit, asyncHandler(async (req,
     ],
   }).lean();
   if (!order) return res.status(404).json({ error: "We could not find an order matching that number and email." });
-  if (String(order.status || "").toLowerCase() !== "delivered") {
+  if (String(order.status || "").toLowerCase() !== ORDER_STATUSES[3]) {
     return res.status(400).json({ error: "Return and exchange requests are available after delivery." });
   }
   const item = itemIndex == null ? null : order.items?.[itemIndex];
@@ -168,7 +179,7 @@ router.post("/return-exchange/email", returnEmailLimit, asyncHandler(async (req,
     return res.status(400).json({ error: "Choose a product and quantity from this order." });
   }
   const customerName = [order.customer?.firstName, order.customer?.lastName].filter(Boolean).join(" ") || "Customer";
-  const requestType = type === "return" ? "Return for refund" : "Exchange";
+  const requestType = type === RETURN_EXCHANGE_TYPES[0] ? "Return for refund" : "Exchange";
   const requestedProduct = item ? `${item.title} · quantity ${quantity}` : "All items / not sure";
   const shipping = order.shippingAddress || order.customer || {};
   const address = [shipping.street || shipping.line1 || shipping.addressLine1, shipping.line2 || shipping.addressLine2, shipping.city, shipping.state, shipping.postalCode, shipping.country].filter(Boolean).join(", ") || "Not provided";
@@ -188,7 +199,17 @@ router.post("/return-exchange/email", returnEmailLimit, asyncHandler(async (req,
     `Reason: ${reason || "Not provided"}`,
     ...(photoUrls.length ? ["", "Photo links:", ...photoUrls] : []),
   ].join("\n");
-  const htmlContent = `<h2>New ${escapeHtml(requestType.toLowerCase())} request</h2><p><strong>Order:</strong> ${escapeHtml(order.orderNumber)} (${escapeHtml(order.status)})</p><p><strong>Requested product:</strong> ${escapeHtml(requestedProduct)}</p><p><strong>Customer:</strong> ${escapeHtml(customerName)}</p><p><strong>Email:</strong> ${escapeHtml(cleanEmail)}</p><p><strong>Phone:</strong> ${escapeHtml(shipping.phone || order.customer?.phone || "Not provided")}</p><p><strong>Delivery address:</strong> ${escapeHtml(address)}</p><p><strong>Order total:</strong> ${escapeHtml(`${order.total} ${order.currency || "INR"}`)}</p>${order.couponCode ? `<p><strong>Coupon:</strong> ${escapeHtml(order.couponCode)}</p>` : ""}<p><strong>Reason:</strong><br>${escapeHtml(reason || "Not provided")}</p>${photoUrls.length ? `<p><strong>Photos:</strong></p><ul>${photoUrls.map((url) => `<li><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></li>`).join("")}</ul>` : ""}`;
+  const htmlContent = buildReturnExchangeEmailTemplate({
+    requestType,
+    order,
+    requestedProduct,
+    customerName,
+    email: cleanEmail,
+    shipping,
+    address,
+    reason,
+    photoUrls,
+  });
   try {
     await sendBrevoEmail({
       toEmail: config.contactEmail,
@@ -215,7 +236,7 @@ router.post("/return-exchange/photos", orderCreateLimit, (req, res, next) => {
   const files = req.files || [];
   if (!files.length) return res.status(400).json({ error: "Choose at least one photo to upload." });
   if (!isCloudinaryConfigured()) return res.status(503).json({ error: "Photo uploads are temporarily unavailable. Please try again later." });
-  const folder = process.env.CLOUDINARY_FOLDER || "healthwithherbal";
+  const folder = require("../config").cloudinaryFolder;
   const images = await Promise.all(files.map((file) => uploadBufferToCloudinary(file.buffer, {
     folder: `${folder}/return-exchange`,
     public_id: `request-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`,
@@ -226,18 +247,16 @@ router.post("/return-exchange/photos", orderCreateLimit, (req, res, next) => {
 router.post(
   "/",
   orderCreateLimit,
+  validate(createOrderSchema, {
+    onInvalid: (res, parsed) =>
+      res.status(400).json({
+        error: "Please check the delivery details and order items.",
+        details: parsed.error.flatten().fieldErrors,
+      }),
+  }),
   asyncHandler(async (req, res) => {
-    const parsed = createOrderSchema.safeParse(req.body);
-    if (!parsed.success) {
-      return res
-        .status(400)
-        .json({
-          error: "Please check the delivery details and order items.",
-          details: parsed.error.flatten().fieldErrors,
-        });
-    }
-
-    const requested = parsed.data.items;
+    const data = req.validatedBody;
+    const requested = data.items;
     const quantityTotal = requested.reduce(
       (sum, item) => sum + item.quantity,
       0,
@@ -293,128 +312,141 @@ router.post(
     const subtotal = Number(
       items.reduce((sum, item) => sum + item.lineTotal, 0).toFixed(2),
     );
-    const country = parsed.data.customer.country.trim().toLowerCase();
+    const country = data.customer.country.trim().toLowerCase();
     const isDomestic = country === "india";
-    const shippingMethod = parsed.data.shippingMethod || (isDomestic ? "standard" : "international_express");
+    const shippingMethod = data.shippingMethod || (isDomestic ? "standard" : "international_express");
     if ((isDomestic && shippingMethod === "international_express") || (!isDomestic && shippingMethod !== "international_express")) {
       return res.status(400).json({ error: "Choose a delivery option that matches the shipping destination." });
     }
     let shipping = isDomestic ? shippingMethod === "express" ? 99 : 0 : 450;
     let discount = 0;
     let couponCode = undefined;
+    let reservedCouponId = null;
 
-    if (parsed.data.couponCode) {
-      const Coupon = require("../models/Coupon");
+    if (data.couponCode) {
       const couponRecord = await Coupon.findOne({
-        code: parsed.data.couponCode.toUpperCase(),
+        code: data.couponCode.toUpperCase(),
         isActive: true,
       });
 
       if (couponRecord) {
-        const meetsMin =
-          !couponRecord.minOrderAmount ||
-          subtotal >= couponRecord.minOrderAmount;
+        const meetsMin = pricingService.meetsMinimumOrderAmount(
+          subtotal,
+          couponRecord.minOrderAmount,
+        );
         const notExpired = !isCouponExpired(couponRecord.expiresAt);
         if (meetsMin && notExpired) {
-          couponCode = couponRecord.code;
-          if (couponRecord.discountType === "percent") {
-            discount = Number(
-              ((subtotal * couponRecord.discountValue) / 100).toFixed(2),
-            );
-            if (couponRecord.maxDiscountAmount) {
-              discount = Math.min(discount, couponRecord.maxDiscountAmount);
-            }
-          } else if (couponRecord.discountType === "fixed") {
-            discount = Number(
-              Math.min(couponRecord.discountValue, subtotal).toFixed(2),
-            );
-          } else if (couponRecord.discountType === "free_shipping") {
-            shipping = 0;
-          }
-          await Coupon.updateOne(
-            { _id: couponRecord._id },
+          const couponAdjustment = pricingService.calculateCouponAdjustment({
+            subtotal,
+            shipping,
+            discountType: couponRecord.discountType,
+            discountValue: couponRecord.discountValue,
+            maxDiscountAmount: couponRecord.maxDiscountAmount,
+          });
+
+          const availabilityFilter = {
+            _id: couponRecord._id,
+            isActive: true,
+            ...(couponRecord.usageLimit == null
+              ? {}
+              : {
+                  $expr: {
+                    $lt: [
+                      { $ifNull: ["$usedCount", 0] },
+                      "$usageLimit",
+                    ],
+                  },
+                }),
+          };
+          const reservation = await Coupon.findOneAndUpdate(
+            availabilityFilter,
             { $inc: { usedCount: 1 } },
+            { new: true },
           );
+          if (reservation) {
+            couponCode = couponRecord.code;
+            discount = couponAdjustment.discount;
+            shipping = couponAdjustment.shipping;
+            reservedCouponId = couponRecord._id;
+          }
         }
       }
     }
 
-    const total = Number(
-      Math.max(0, subtotal - discount + shipping).toFixed(2),
-    );
+    const total = pricingService.calculateOrderTotal({
+      subtotal,
+      discount,
+      shipping,
+    });
     const orderNumber = `HWH-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
 
     const customerPhone =
       req.body.phone ||
-      parsed.data.phone ||
-      parsed.data.customer.phone ||
+      data.phone ||
+      data.customer.phone ||
       "";
     const orderUserId =
       req.body.userId && mongoose.isValidObjectId(req.body.userId)
         ? req.body.userId
-        : parsed.data.userId && mongoose.isValidObjectId(parsed.data.userId)
-          ? parsed.data.userId
+        : data.userId && mongoose.isValidObjectId(data.userId)
+          ? data.userId
           : null;
-    const orderNote = req.body.orderNote || parsed.data.orderNote || "";
+    const orderNote = req.body.orderNote || data.orderNote || "";
 
-    const order = await Order.create({
-      orderNumber,
-      shippingMethod,
-      userId: orderUserId,
-      guestEmail: parsed.data.customer.email,
-      customer: {
-        ...parsed.data.customer,
-        phone: customerPhone,
-      },
-      shippingAddress: {
-        ...parsed.data.customer,
-        phone: customerPhone,
-      },
-      billingAddress: {
-        ...parsed.data.customer,
-        phone: customerPhone,
-      },
-      orderNote,
-      items,
-      subtotal,
-      shipping,
-      shippingFee: shipping,
-      couponCode,
-      discount,
-      total,
-      paymentMethod: "cash_on_delivery",
-      status: "placed",
-    });
+    let order;
+    try {
+      order = await Order.create({
+        orderNumber,
+        shippingMethod,
+        userId: orderUserId,
+        guestEmail: data.customer.email,
+        customer: {
+          ...data.customer,
+          phone: customerPhone,
+        },
+        shippingAddress: {
+          ...data.customer,
+          phone: customerPhone,
+        },
+        billingAddress: {
+          ...data.customer,
+          phone: customerPhone,
+        },
+        orderNote,
+        items,
+        subtotal,
+        shipping,
+        shippingFee: shipping,
+        couponCode,
+        discount,
+        total,
+        paymentMethod: PAYMENT_METHODS[0],
+        status: ORDER_STATUSES[0],
+      });
+    } catch (error) {
+      if (reservedCouponId) {
+        try {
+          await Coupon.updateOne(
+            { _id: reservedCouponId, usedCount: { $gt: 0 } },
+            { $inc: { usedCount: -1 } },
+          );
+        } catch (_rollbackError) {
+          // Preserve the order creation error if the reservation rollback fails.
+        }
+      }
+      throw error;
+    }
 
     // Deduct stock quantity in the database and create inventory audit logs
-    const stockUpdates = items.map(async (item) => {
-      const prod = byId.get(item.legacyId);
-      const before = prod ? (prod.stockQty ?? 0) : 0;
-      const after = Math.max(0, before - item.quantity);
-
-      await Product.updateOne(
-        { _id: item.product },
-        [
-          {
-            $set: {
-              stockQty: {
-                $max: [0, { $subtract: ["$stockQty", item.quantity] }],
-              },
-            },
-          },
-        ],
-      );
-
-      await InventoryLog.create({
-        productId: item.product,
-        orderId: order._id,
-        type: "sale",
-        quantityChange: -item.quantity,
-        stockBefore: before,
-        stockAfter: after,
-        reason: `Order ${order.orderNumber} placed`,
-      });
-    });
+    const stockUpdates = items.map((item) =>
+      inventoryService.deductStockForNewOrder({
+        Product,
+        InventoryLog,
+        item,
+        product: byId.get(item.legacyId),
+        order,
+      }),
+    );
 
     await Promise.all([
       OrderItem.insertMany(
@@ -430,10 +462,10 @@ router.post(
       ),
       Payment.create({
         orderId: order._id,
-        method: "cash_on_delivery",
+        method: PAYMENT_METHODS[0],
         amount: total,
         currency: order.currency,
-        status: "pending",
+        status: PAYMENT_STATUSES[0],
       }),
       ...stockUpdates,
     ]);

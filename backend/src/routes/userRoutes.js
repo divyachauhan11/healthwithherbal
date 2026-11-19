@@ -7,6 +7,8 @@ const Wishlist = require("../models/Wishlist");
 const Product = require("../models/Product");
 const ReturnExchangeRequest = require("../models/ReturnExchangeRequest");
 const { requireUserSession } = require("../middleware/userSession");
+const { validateObjectId } = require("../middleware/validateObjectId");
+const { normalizePhone } = require("../utils/string");
 
 const router = express.Router();
 
@@ -59,12 +61,6 @@ router.delete("/wishlist/:productId", requireUserSession, async (req, res) => {
     res.status(500).json({ error: "Could not remove this wishlist item." });
   }
 });
-
-function normalizePhone(raw) {
-  if (!raw) return "";
-  const digits = String(raw).replace(/\D/g, "");
-  return digits.length >= 10 ? digits.slice(-10) : digits;
-}
 
 // -----------------------------------------------------------------------------
 // GET /api/user/orders
@@ -279,12 +275,12 @@ router.post("/addresses", async (req, res) => {
 
 // PUT /api/user/addresses/:id
 // Update an existing saved delivery address.
-router.put("/addresses/:id", async (req, res) => {
+router.put(
+  "/addresses/:id",
+  validateObjectId("id", { message: "Invalid address ID." }),
+  async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.isValidObjectId(id)) {
-      return res.status(400).json({ error: "Invalid address ID." });
-    }
 
     const {
       fullName,
@@ -338,18 +334,19 @@ router.put("/addresses/:id", async (req, res) => {
     console.error("Error updating address:", error);
     return res.status(500).json({ error: "Could not update saved address." });
   }
-});
+  },
+);
 
 // -----------------------------------------------------------------------------
 // DELETE /api/user/addresses/:id
 // Remove a saved address from MongoDB
 // -----------------------------------------------------------------------------
-router.delete("/addresses/:id", async (req, res) => {
+router.delete(
+  "/addresses/:id",
+  validateObjectId("id", { message: "Invalid address ID." }),
+  async (req, res) => {
   try {
     const { id } = req.params;
-    if (!mongoose.isValidObjectId(id)) {
-      return res.status(400).json({ error: "Invalid address ID." });
-    }
 
     await Address.findByIdAndDelete(id);
     return res.json({ success: true, message: "Address deleted." });
@@ -357,6 +354,7 @@ router.delete("/addresses/:id", async (req, res) => {
     console.error("Error deleting address:", error);
     return res.status(500).json({ error: "Could not delete address." });
   }
-});
+  },
+);
 
 module.exports = router;

@@ -16,9 +16,18 @@ const CartItem = require("../models/CartItem");
 const StoreSetting = require("../models/StoreSetting");
 const { isCouponExpired } = require("../utils/couponExpiry");
 const { attachBlogMetrics } = require("../utils/blogMetrics");
+const { USER_ROLES } = require("../constants/roles");
+const {
+  BLOG_POST_STATUSES,
+  BLOG_COMMENT_STATUSES,
+  REVIEW_STATUSES,
+} = require("../constants/statuses");
 const { rateLimit } = require("express-rate-limit");
 
 const router = express.Router();
+const isCouponUsageLimitReached = (coupon) =>
+  coupon.usageLimit != null &&
+  Number(coupon.usedCount || 0) >= Number(coupon.usageLimit);
 const blogViewLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 120,
@@ -89,7 +98,7 @@ router.get(
           .sort({ createdAt: -1 })
           .lean()
           .then((items) => items.filter((coupon) => !isCouponExpired(coupon.expiresAt))),
-        BlogPost.find({ status: "published" })
+        BlogPost.find({ status: BLOG_POST_STATUSES[1] })
           .populate("authorId", "name email")
           .sort({ publishedAt: -1 })
           .lean(),
@@ -185,7 +194,9 @@ router.get(
   "/coupons",
   asyncHandler(async (_req, res) => {
     const coupons = (await Coupon.find({ isActive: true }).lean()).filter(
-      (coupon) => !isCouponExpired(coupon.expiresAt),
+      (coupon) =>
+        !isCouponExpired(coupon.expiresAt) &&
+        !isCouponUsageLimitReached(coupon),
     );
     res.json(coupons);
   }),
@@ -203,7 +214,11 @@ router.get(
 
     const coupon = await Coupon.findOne({ code, isActive: true }).lean();
 
-    if (!coupon || isCouponExpired(coupon.expiresAt))
+    if (
+      !coupon ||
+      isCouponExpired(coupon.expiresAt) ||
+      isCouponUsageLimitReached(coupon)
+    )
       return res.status(404).json({ error: "Invalid or expired coupon code." });
     res.json({ valid: true, coupon });
   }),
@@ -403,7 +418,7 @@ router.post(
 router.get(
   "/blogs",
   asyncHandler(async (_req, res) => {
-    const blogs = await BlogPost.find({ status: "published" })
+    const blogs = await BlogPost.find({ status: BLOG_POST_STATUSES[1] })
       .populate("authorId", "name email")
       .sort({ publishedAt: -1 })
       .lean();
@@ -432,7 +447,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const post = await BlogPost.findOne({
       slug: req.params.slug,
-      status: "published",
+      status: BLOG_POST_STATUSES[1],
     })
       .populate("authorId", "name email")
       .lean();
@@ -456,7 +471,7 @@ router.get(
 router.get(
   "/blogs/:slug/community",
   asyncHandler(async (req, res) => {
-    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" })
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: BLOG_POST_STATUSES[1] })
       .select("_id viewsCount allowComments")
       .lean();
     if (!post) return res.status(404).json({ error: "Blog post not found." });
@@ -464,8 +479,8 @@ router.get(
     const sessionId = String(req.query.sessionId || "").trim();
     const [likes, commentCount, comments, liked] = await Promise.all([
       BlogLike.countDocuments({ postId: post._id }),
-      BlogComment.countDocuments({ postId: post._id, status: "approved" }),
-      BlogComment.find({ postId: post._id, status: "approved" })
+      BlogComment.countDocuments({ postId: post._id, status: BLOG_COMMENT_STATUSES[1] }),
+      BlogComment.find({ postId: post._id, status: BLOG_COMMENT_STATUSES[1] })
         .select("authorName content createdAt")
         .sort({ createdAt: -1 })
         .limit(100)
@@ -489,7 +504,7 @@ router.post(
   "/blogs/:slug/view",
   blogViewLimiter,
   asyncHandler(async (req, res) => {
-    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" }).select("_id");
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: BLOG_POST_STATUSES[1] }).select("_id");
     if (!post) return res.status(404).json({ error: "Blog post not found." });
     const sessionId = String(req.body?.sessionId || "").trim().slice(0, 100);
     if (sessionId.length < 16) return res.status(400).json({ error: "A valid visitor session is required." });
@@ -506,7 +521,7 @@ router.post(
   "/blogs/:slug/like",
   blogInteractionLimiter,
   asyncHandler(async (req, res) => {
-    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" }).select("_id");
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: BLOG_POST_STATUSES[1] }).select("_id");
     if (!post) return res.status(404).json({ error: "Blog post not found." });
     const sessionId = String(req.body?.sessionId || "").trim();
     if (sessionId.length < 16 || sessionId.length > 100) {
@@ -529,7 +544,7 @@ router.delete(
   "/blogs/:slug/like",
   blogInteractionLimiter,
   asyncHandler(async (req, res) => {
-    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" }).select("_id");
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: BLOG_POST_STATUSES[1] }).select("_id");
     if (!post) return res.status(404).json({ error: "Blog post not found." });
     const sessionId = String(req.query.sessionId || "").trim();
     if (!sessionId) return res.status(400).json({ error: "A visitor session is required to remove a like." });
@@ -541,9 +556,9 @@ router.delete(
 router.get(
   "/blogs/:slug/comments",
   asyncHandler(async (req, res) => {
-    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" }).select("_id");
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: BLOG_POST_STATUSES[1] }).select("_id");
     if (!post) return res.status(404).json({ error: "Blog post not found." });
-    const items = await BlogComment.find({ postId: post._id, status: "approved" })
+    const items = await BlogComment.find({ postId: post._id, status: BLOG_COMMENT_STATUSES[1] })
       .select("authorName content createdAt")
       .sort({ createdAt: -1 })
       .limit(100)
@@ -556,7 +571,7 @@ router.post(
   "/blogs/:slug/comments",
   blogInteractionLimiter,
   asyncHandler(async (req, res) => {
-    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" }).select("_id allowComments");
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: BLOG_POST_STATUSES[1] }).select("_id allowComments");
     if (!post) return res.status(404).json({ error: "Blog post not found." });
     if (post.allowComments === false) return res.status(403).json({ error: "Comments are closed for this article." });
     const authorName = String(req.body?.authorName || "").trim();
@@ -571,7 +586,7 @@ router.post(
     if (content.length < 3 || content.length > 2000) {
       return res.status(400).json({ error: "Comment must be between 3 and 2,000 characters." });
     }
-    await BlogComment.create({ postId: post._id, authorName, authorEmail, content, status: "pending" });
+    await BlogComment.create({ postId: post._id, authorName, authorEmail, content, status: BLOG_COMMENT_STATUSES[0] });
     await BlogPost.updateOne({ _id: post._id }, { $inc: { commentsCount: 1 } });
     res.status(201).json({ message: "Your comment was submitted and is awaiting approval." });
   }),
@@ -673,7 +688,7 @@ router.post(
     } else if (userEmail) {
       const u = await User.findOne({
         email: String(userEmail).trim().toLowerCase(),
-        role: "customer",
+        role: USER_ROLES.CUSTOMER,
       })
         .select("_id")
         .lean();
@@ -703,7 +718,7 @@ router.post(
       rating: numRating,
       title: String(title || "").trim(),
       comment: String(comment || "").trim(),
-      status: "pending",
+      status: REVIEW_STATUSES[0],
       isApproved: false,
     });
 

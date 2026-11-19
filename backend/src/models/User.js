@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { USER_ROLES } = require("../constants/roles");
 const userSchema = new mongoose.Schema(
   {
     name: { type: String, trim: true, required: true },
@@ -16,7 +17,7 @@ const userSchema = new mongoose.Schema(
     phone: { type: String, trim: true, index: true },
     avatarUrl: { type: String, trim: true, default: "" },
     avatarPublicId: { type: String, trim: true, default: "" },
-    role: { type: String, enum: ["customer", "admin", "employee"], default: "customer" },
+    role: { type: String, enum: Object.values(USER_ROLES), default: USER_ROLES.CUSTOMER },
     isActive: { type: Boolean, default: true },
     authVersion: { type: Number, default: 0 },
     passwordResetTokenHash: { type: String, default: "", select: false },

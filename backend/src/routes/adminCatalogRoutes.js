@@ -1,3 +1,7 @@
+const { slugify } = require("../utils/string");
+const { validate } = require("../middleware/validate");
+const { validateObjectId } = require("../middleware/validateObjectId");
+
 function registerAdminCatalogRoutes({
   router,
   asyncHandler,
@@ -10,7 +14,6 @@ function registerAdminCatalogRoutes({
   brandSchema,
   couponSchema,
   invalid,
-  slugify,
   validId,
 }) {
   function collectionRoutes(path, Model, schema, extra = {}) {
@@ -146,10 +149,9 @@ function registerAdminCatalogRoutes({
     );
     router.post(
       `/${path}`,
+      validate(schema, { onInvalid: invalid }),
       asyncHandler(async (req, res) => {
-        const parsed = schema.safeParse(req.body);
-        if (!parsed.success) return invalid(res, parsed);
-        const data = { ...parsed.data };
+        const data = { ...req.validatedBody };
         if (data.name && !data.slug) data.slug = slugify(data.name);
         if (data.code) data.code = data.code.toUpperCase();
         if (path === "categories") {
@@ -184,14 +186,12 @@ function registerAdminCatalogRoutes({
     );
     router.put(
       `/${path}/:id`,
+      validateObjectId("id", {
+        message: `Invalid ${path.slice(0, -1)} ID.`,
+      }),
+      validate(schema, { onInvalid: invalid }),
       asyncHandler(async (req, res) => {
-        if (!validId(req.params.id))
-          return res
-            .status(400)
-            .json({ error: `Invalid ${path.slice(0, -1)} ID.` });
-        const parsed = schema.safeParse(req.body);
-        if (!parsed.success) return invalid(res, parsed);
-        const data = { ...parsed.data };
+        const data = { ...req.validatedBody };
         if (path === "categories") {
           const hasChildren = await Category.exists({ parentId: req.params.id });
           if (data.isParent && data.parentId) return res.status(400).json({ error: "A parent category cannot have another parent." });
@@ -233,11 +233,10 @@ function registerAdminCatalogRoutes({
     );
     router.delete(
       `/${path}/:id`,
+      validateObjectId("id", {
+        message: `Invalid ${path.slice(0, -1)} ID.`,
+      }),
       asyncHandler(async (req, res) => {
-        if (!validId(req.params.id))
-          return res
-            .status(400)
-            .json({ error: `Invalid ${path.slice(0, -1)} ID.` });
         if (path === "categories") {
           const catDoc = await Category.findById(req.params.id).lean();
           if (catDoc?.isParent && await Category.exists({ parentId: catDoc._id })) {

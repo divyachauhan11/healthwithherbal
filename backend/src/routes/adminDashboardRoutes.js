@@ -1,3 +1,15 @@
+const { USER_ROLES } = require("../constants/roles");
+const { ADMIN_PAGE_BY_PATH } = require("../constants/pages");
+const {
+  ORDER_STATUSES,
+  PAYMENT_STATUSES,
+  RETURN_EXCHANGE_TYPES,
+  RETURN_EXCHANGE_STATUSES,
+  REFUND_STATUSES,
+  BLOG_COMMENT_STATUSES,
+  REVIEW_STATUSES,
+} = require("../constants/statuses");
+
 function registerAdminDashboardRoutes({
   router,
   asyncHandler,
@@ -18,30 +30,30 @@ function registerAdminDashboardRoutes({
       const canSee = (page) => !grantedPages || grantedPages.has(page);
       const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
       const tasks = await Promise.all([
-        canSee("Orders") ? Order.find({ $or: [{ createdAt: { $gte: since } }, { updatedAt: { $gte: since } }] }).sort({ updatedAt: -1 }).limit(12).lean() : [],
-        canSee("Payments") ? Payment.find({ updatedAt: { $gte: since } }).sort({ updatedAt: -1 }).limit(12).lean() : [],
-        canSee("Returns & Exchanges") ? ReturnExchangeRequest.find({ $or: [{ createdAt: { $gte: since } }, { updatedAt: { $gte: since } }] }).sort({ updatedAt: -1 }).limit(12).lean() : [],
-        canSee("Reviews") ? ProductReview.find({ status: "pending" }).sort({ createdAt: -1 }).limit(8).lean() : [],
-        canSee("Blogs") ? BlogComment.find({ status: "pending" }).sort({ createdAt: -1 }).limit(8).lean() : [],
-        canSee("Low Stock") ? Product.find({ active: true, stockQty: { $lte: 10 }, updatedAt: { $gte: since } }).sort({ stockQty: 1, updatedAt: -1 }).limit(8).lean() : [],
+        canSee(ADMIN_PAGE_BY_PATH.orders) ? Order.find({ $or: [{ createdAt: { $gte: since } }, { updatedAt: { $gte: since } }] }).sort({ updatedAt: -1 }).limit(12).lean() : [],
+        canSee(ADMIN_PAGE_BY_PATH.payments) ? Payment.find({ updatedAt: { $gte: since } }).sort({ updatedAt: -1 }).limit(12).lean() : [],
+        canSee(ADMIN_PAGE_BY_PATH["return-exchange"]) ? ReturnExchangeRequest.find({ $or: [{ createdAt: { $gte: since } }, { updatedAt: { $gte: since } }] }).sort({ updatedAt: -1 }).limit(12).lean() : [],
+        canSee(ADMIN_PAGE_BY_PATH.reviews) ? ProductReview.find({ status: REVIEW_STATUSES[0] }).sort({ createdAt: -1 }).limit(8).lean() : [],
+        canSee(ADMIN_PAGE_BY_PATH.blogs) ? BlogComment.find({ status: BLOG_COMMENT_STATUSES[0] }).sort({ createdAt: -1 }).limit(8).lean() : [],
+        canSee(ADMIN_PAGE_BY_PATH["low-stock"]) ? Product.find({ active: true, stockQty: { $lte: 10 }, updatedAt: { $gte: since } }).sort({ stockQty: 1, updatedAt: -1 }).limit(8).lean() : [],
       ]);
       const [orders, payments, requests, reviews, comments, lowStock] = tasks;
       const notifications = [
         ...orders.map((order) => ({
           id: `order-${order._id}`,
           type: "order",
-          page: "Orders",
+          page: ADMIN_PAGE_BY_PATH.orders,
           query: order.orderNumber || "",
           title: new Date(order.updatedAt || order.createdAt) - new Date(order.createdAt) > 1000 ? "Order updated" : "New order placed",
-          message: `${order.orderNumber || "Order"} · ${[order.customer?.firstName, order.customer?.lastName].filter(Boolean).join(" ") || order.customer?.email || "Customer"} · ${String(order.status || "placed").replaceAll("_", " ")}`,
+          message: `${order.orderNumber || "Order"} · ${[order.customer?.firstName, order.customer?.lastName].filter(Boolean).join(" ") || order.customer?.email || "Customer"} · ${String(order.status || ORDER_STATUSES[0]).replaceAll("_", " ")}`,
           createdAt: order.updatedAt || order.createdAt,
         })),
         ...payments.map((payment) => {
-          const label = payment.status === "paid" ? "Payment received" : payment.status === "failed" ? "Payment failed" : payment.status === "refunded" ? "Payment refunded" : "Payment awaiting collection";
+          const label = payment.status === PAYMENT_STATUSES[2] ? "Payment received" : payment.status === PAYMENT_STATUSES[3] ? "Payment failed" : payment.status === PAYMENT_STATUSES[4] ? "Payment refunded" : "Payment awaiting collection";
           return {
             id: `payment-${payment._id}`,
             type: "payment",
-            page: "Payments",
+            page: ADMIN_PAGE_BY_PATH.payments,
             query: String(payment.orderId || ""),
             title: label,
             message: `${String(payment.method || "Payment").replaceAll("_", " ")} · ${new Intl.NumberFormat("en-IN", { style: "currency", currency: payment.currency || "INR" }).format(Number(payment.amount) || 0)}`,
@@ -51,13 +63,13 @@ function registerAdminDashboardRoutes({
         ...requests.map((request) => ({
           id: `return-${request._id}`,
           type: request.type,
-          page: "Returns & Exchanges",
+          page: ADMIN_PAGE_BY_PATH["return-exchange"],
           query: request.orderNumber || "",
-          title: request.refundStatus === "processed"
-            ? `Refund recorded for ${request.type || "return"}`
-            : request.refundStatus === "pending"
-              ? `Refund pending for ${request.type || "return"}`
-              : request.status === "pending"
+          title: request.refundStatus === REFUND_STATUSES[2]
+            ? `Refund recorded for ${request.type || RETURN_EXCHANGE_TYPES[0]}`
+            : request.refundStatus === REFUND_STATUSES[1]
+              ? `Refund pending for ${request.type || RETURN_EXCHANGE_TYPES[0]}`
+              : request.status === RETURN_EXCHANGE_STATUSES[0]
                 ? `New ${request.type || "return/exchange"} request`
                 : `${request.type || "Return/exchange"} request updated`,
           message: `${request.orderNumber || "Order"} · ${request.customer?.name || request.customer?.email || "Customer"}`,
@@ -66,7 +78,7 @@ function registerAdminDashboardRoutes({
         ...reviews.map((review) => ({
           id: `review-${review._id}`,
           type: "review",
-          page: "Reviews",
+          page: ADMIN_PAGE_BY_PATH.reviews,
           query: review.orderNumber || review.userName || "",
           title: "Review awaiting approval",
           message: `${review.userName || "Customer"} · ${review.rating || "—"} star${review.rating === 1 ? "" : "s"}`,
@@ -75,7 +87,7 @@ function registerAdminDashboardRoutes({
         ...comments.map((comment) => ({
           id: `comment-${comment._id}`,
           type: "comment",
-          page: "Blogs",
+          page: ADMIN_PAGE_BY_PATH.blogs,
           query: comment.authorName || "",
           title: "Blog comment awaiting moderation",
           message: `${comment.authorName || "Reader"} · ${String(comment.content || "").slice(0, 90)}`,
@@ -84,7 +96,7 @@ function registerAdminDashboardRoutes({
         ...lowStock.map((product) => ({
           id: `stock-${product._id}`,
           type: "inventory",
-          page: "Low Stock",
+          page: ADMIN_PAGE_BY_PATH["low-stock"],
           query: product.title || "",
           title: Number(product.stockQty) <= 0 ? "Product out of stock" : "Product stock running low",
           message: `${product.title || "Product"} · ${Number(product.stockQty) || 0} units remaining`,
@@ -103,7 +115,7 @@ function registerAdminDashboardRoutes({
 
       const getSalesByCategory = (matchStage) =>
         Order.aggregate([
-          { $match: { status: { $ne: "cancelled" }, ...matchStage } },
+          { $match: { status: { $ne: ORDER_STATUSES[4] }, ...matchStage } },
           { $unwind: "$items" },
           {
             $lookup: {
@@ -165,22 +177,22 @@ function registerAdminDashboardRoutes({
         Product.countDocuments({ active: true }),
         Product.countDocuments(lowStockFilter),
         Order.countDocuments(),
-        Order.countDocuments({ status: { $in: ["placed", "processing"] } }),
+        Order.countDocuments({ status: { $in: [ORDER_STATUSES[0], ORDER_STATUSES[1]] } }),
         Order.aggregate([
-          { $match: { status: { $ne: "cancelled" } } },
+          { $match: { status: { $ne: ORDER_STATUSES[4] } } },
           { $group: { _id: null, total: { $sum: "$total" } } },
         ]),
         Order.aggregate([
           {
             $match: {
-              status: { $ne: "cancelled" },
+              status: { $ne: ORDER_STATUSES[4] },
               createdAt: { $gte: startOfMonth },
             },
           },
           { $group: { _id: null, total: { $sum: "$total" } } },
         ]),
         Promise.all([
-          User.distinct("email", { role: "customer" }),
+          User.distinct("email", { role: USER_ROLES.CUSTOMER }),
           Order.distinct("customer.email"),
         ]).then(([accounts, buyers]) => [
           ...new Set([...accounts, ...buyers].filter(Boolean).map((email) => email.toLowerCase())),
@@ -199,7 +211,7 @@ function registerAdminDashboardRoutes({
         Order.aggregate([
           {
             $match: {
-              status: { $ne: "cancelled" },
+              status: { $ne: ORDER_STATUSES[4] },
               createdAt: { $gte: new Date(Date.now() - 7 * 86400000) },
             },
           },

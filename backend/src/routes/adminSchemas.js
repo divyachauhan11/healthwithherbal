@@ -1,9 +1,13 @@
 const mongoose = require("mongoose");
 const { z } = require("zod");
-const adminPortalPages = [
-  "Dashboard", "Products", "Low Stock", "Categories", "Brands", "Orders", "Payments",
-  "Coupons", "Reviews", "Returns & Exchanges", "Customers", "Blogs", "Users", "Settings", "Profile",
-];
+const { ADMIN_PORTAL_PAGES } = require("../constants/pages");
+const { ADMIN_ROLES } = require("../constants/roles");
+const {
+  ORDER_STATUSES,
+  BLOG_POST_STATUSES,
+  DISCOUNT_TYPES,
+} = require("../constants/statuses");
+const adminPortalPages = ADMIN_PORTAL_PAGES;
 const loginSchema = z.object({
   email: z.string().email().max(254),
   password: z.string().min(1).max(200),
@@ -42,7 +46,7 @@ const brandSchema = z.object({
 const couponSchema = z.object({
   code: z.string().trim().min(3).max(40),
   description: z.string().max(500).optional().default(""),
-  discountType: z.enum(["percent", "fixed", "free_shipping"]),
+  discountType: z.enum(DISCOUNT_TYPES),
   discountValue: z.coerce.number().min(0),
   minOrderAmount: z.coerce.number().min(0).optional().default(0),
   usageLimit: z.coerce.number().int().min(1).optional(),
@@ -50,7 +54,7 @@ const couponSchema = z.object({
   isActive: z.coerce.boolean().optional().default(true),
 });
 const orderStatusSchema = z.object({
-  status: z.enum(["placed", "processing", "shipped", "delivered", "cancelled"]),
+  status: z.enum(ORDER_STATUSES),
 });
 const blogSchema = z.object({
   title: z.string().trim().min(4).max(180),
@@ -62,13 +66,13 @@ const blogSchema = z.object({
   content: z.string().min(20).max(50000),
   coverImage: z.string().url().or(z.literal("")).optional(),
   tags: z.array(z.string().trim().max(40)).max(12).optional().default([]),
-  status: z.enum(["draft", "published"]).optional().default("draft"),
+  status: z.enum(BLOG_POST_STATUSES).optional().default(BLOG_POST_STATUSES[0]),
   allowComments: z.coerce.boolean().optional().default(true),
 });
 const staffUserFields = {
   name: z.string().trim().min(2).max(120),
   email: z.string().trim().email().max(254),
-  role: z.enum(["admin", "employee"]),
+  role: z.enum(ADMIN_ROLES),
   isActive: z.coerce.boolean(),
   pageAccess: z.array(z.enum(adminPortalPages)).optional().default([]),
 };

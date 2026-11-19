@@ -5,14 +5,10 @@ const Otp = require("../models/Otp");
 const config = require("../config");
 const brevoService = require("../services/brevoService");
 const { createUserToken } = require("../middleware/userSession");
+const { USER_ROLES } = require("../constants/roles");
+const { normalizePhone } = require("../utils/string");
 
 const router = express.Router();
-
-function normalizePhone(rawPhone) {
-  if (!rawPhone) return "";
-  const digits = String(rawPhone).replace(/\D/g, "");
-  return digits.length >= 10 ? digits.slice(-10) : digits;
-}
 
 function maskEmail(email) {
   if (!email || !email.includes("@")) return email || "";
@@ -47,7 +43,7 @@ router.post("/login/request-otp", async (req, res) => {
 
     if (isEmailInput) {
       const cleanEmail = rawInput.toLowerCase();
-      user = await User.findOne({ email: cleanEmail, role: "customer" });
+      user = await User.findOne({ email: cleanEmail, role: USER_ROLES.CUSTOMER });
       if (!user) {
         return res.status(404).json({
           notRegistered: true,
@@ -160,7 +156,7 @@ router.post("/login/verify-otp", async (req, res) => {
 
     let user = null;
     if (rawInput.includes("@")) {
-      user = await User.findOne({ email: rawInput.toLowerCase(), role: "customer" });
+      user = await User.findOne({ email: rawInput.toLowerCase(), role: USER_ROLES.CUSTOMER });
     } else {
       const cleanPhone = normalizePhone(rawInput);
       user = await User.findOne({
@@ -261,7 +257,7 @@ router.post("/signup/request-otp", async (req, res) => {
     // Check if an account already exists in MongoDB with this phone or email
     const existingUser = await User.findOne({
       $or: [
-        { email: cleanEmail, role: "customer" },
+        { email: cleanEmail, role: USER_ROLES.CUSTOMER },
         { phone: cleanPhone },
         { phone: `+91${cleanPhone}` },
         { phone: new RegExp(`${cleanPhone}$`) },
@@ -375,7 +371,7 @@ router.post("/signup/verify-otp", async (req, res) => {
     // Ensure email or phone was not created in the meantime
     const existingUser = await User.findOne({
       $or: [
-        { email: cleanEmail, role: "customer" },
+        { email: cleanEmail, role: USER_ROLES.CUSTOMER },
         { phone: cleanPhone },
         { phone: `+91${cleanPhone}` },
         { phone: new RegExp(`${cleanPhone}$`) },
@@ -395,7 +391,7 @@ router.post("/signup/verify-otp", async (req, res) => {
       name: cleanName,
       email: cleanEmail,
       phone: cleanPhone,
-      role: "customer",
+      role: USER_ROLES.CUSTOMER,
       isActive: true,
       passwordHash: crypto.randomBytes(32).toString("hex"),
     });
@@ -457,7 +453,7 @@ router.post("/social", async (req, res) => {
     const cleanEmail = claims.email.toLowerCase();
     const cleanName = (claims.name || claims.given_name || "Google Customer").trim();
 
-    let user = await User.findOne({ email: cleanEmail, role: "customer" });
+    let user = await User.findOne({ email: cleanEmail, role: USER_ROLES.CUSTOMER });
 
     if (user && !user.isActive) {
       return res.status(403).json({ error: "This account is unavailable. Please contact support." });
@@ -467,7 +463,7 @@ router.post("/social", async (req, res) => {
       user = await User.create({
         name: cleanName,
         email: cleanEmail,
-        role: "customer",
+        role: USER_ROLES.CUSTOMER,
         isActive: true,
         passwordHash: crypto.randomBytes(32).toString("hex"),
       });

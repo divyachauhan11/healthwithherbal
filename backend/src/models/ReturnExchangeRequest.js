@@ -1,20 +1,26 @@
 const mongoose = require("mongoose");
+const {
+  RETURN_EXCHANGE_TYPES,
+  RETURN_EXCHANGE_STATUSES,
+  REFUND_STATUSES,
+  REFUND_METHODS,
+} = require("../constants/statuses");
 
 const schema = new mongoose.Schema({
   orderId: { type: mongoose.Schema.Types.ObjectId, ref: "Order", required: true, index: true },
   orderNumber: { type: String, required: true, index: true },
   customer: { type: mongoose.Schema.Types.Mixed, required: true },
-  type: { type: String, enum: ["return", "exchange"], required: true, index: true },
+  type: { type: String, enum: RETURN_EXCHANGE_TYPES, required: true, index: true },
   itemIndex: { type: Number, required: true, min: 0 },
   item: { type: mongoose.Schema.Types.Mixed, required: true },
   quantity: { type: Number, required: true, min: 1 },
   reason: { type: String, required: true, trim: true, maxlength: 1000 },
   photos: { type: [String], default: [] },
-  status: { type: String, enum: ["pending", "approved", "rejected", "completed"], default: "pending", index: true },
+  status: { type: String, enum: RETURN_EXCHANGE_STATUSES, default: RETURN_EXCHANGE_STATUSES[0], index: true },
   adminNote: { type: String, trim: true, maxlength: 1000, default: "" },
-  refundStatus: { type: String, enum: ["not_required", "pending", "processed"], default: "pending", index: true },
+  refundStatus: { type: String, enum: REFUND_STATUSES, default: REFUND_STATUSES[1], index: true },
   refundAmount: { type: Number, min: 0, default: 0 },
-  refundMethod: { type: String, enum: ["not_applicable", "original_payment", "bank_transfer", "cash", "store_credit", "other"], default: "not_applicable" },
+  refundMethod: { type: String, enum: REFUND_METHODS, default: REFUND_METHODS[0] },
   refundReference: { type: String, trim: true, maxlength: 120, default: "" },
   refundProcessedAt: { type: Date, default: null },
 }, { timestamps: true, versionKey: false });

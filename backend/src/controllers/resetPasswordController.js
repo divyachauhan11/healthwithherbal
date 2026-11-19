@@ -1,12 +1,8 @@
 const crypto = require("node:crypto");
+const { hashPassword, safeEqual } = require("../utils/crypto");
+const { ADMIN_ROLES } = require("../constants/roles");
 
 const INVALID_LINK_MESSAGE = "This password reset link is invalid or has expired. Request a new link and try again.";
-
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `scrypt$${salt}$${hash}`;
-}
 
 function createResetPasswordController({ User }) {
   return async function resetPasswordController(req, res) {
@@ -27,7 +23,7 @@ function createResetPasswordController({ User }) {
     try {
       const staff = await User.findOne({
         email,
-        role: { $in: ["admin", "employee"] },
+        role: { $in: ADMIN_ROLES },
         isActive: true,
       }).select("+passwordResetTokenHash +passwordResetExpiresAt");
 
@@ -37,8 +33,7 @@ function createResetPasswordController({ User }) {
       const expected = /^[a-f0-9]{64}$/i.test(expectedHash)
         ? Buffer.from(expectedHash, "hex")
         : Buffer.alloc(0);
-      const tokenMatches = expected.length === receivedHash.length &&
-        crypto.timingSafeEqual(expected, receivedHash);
+      const tokenMatches = safeEqual(expected, receivedHash);
 
       if (!staff || !tokenMatches || !expiresAt || expiresAt <= new Date()) {
         return res.status(400).json({ error: INVALID_LINK_MESSAGE });

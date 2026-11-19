@@ -1,9 +1,10 @@
-const crypto = require("node:crypto");
 const {
   createAdminToken,
   requireAdmin,
-  safeEqual,
 } = require("../middleware/adminAuth");
+const { safeEqual, verifyPassword } = require("../utils/crypto");
+const { USER_ROLES, ADMIN_ROLES } = require("../constants/roles");
+const { validate } = require("../middleware/validate");
 const { requirePageAccess } = require("../middleware/adminPageAccess");
 const createForgotPasswordController = require("../controllers/forgotPasswordController");
 const createResetPasswordController = require("../controllers/resetPasswordController");
@@ -27,13 +28,14 @@ function registerAdminAuthRoutes({
 
   router.post(
     "/auth/login",
+    validate(loginSchema, { onInvalid: invalid }),
     asyncHandler(async (req, res) => {
-      const parsed = loginSchema.safeParse(req.body);
-      if (!parsed.success) return invalid(res, parsed);
+      const data = req.validatedBody;
 
-      const email = process.env.ADMIN_EMAIL || "";
-      const password = process.env.ADMIN_PASSWORD || "";
-      const secret = process.env.ADMIN_SESSION_SECRET || "";
+      const config = require("../config");
+      const email = config.adminEmail;
+      const password = config.adminPassword;
+      const secret = config.adminSessionSecret;
       if (secret.length < 32) {
         return res.status(503).json({
           error:
@@ -44,13 +46,13 @@ function registerAdminAuthRoutes({
       const isConfiguredAdmin = Boolean(
         email &&
           password &&
-          safeEqual(parsed.data.email.toLowerCase(), email.toLowerCase()) &&
-          safeEqual(parsed.data.password, password),
+          safeEqual(data.email.toLowerCase(), email.toLowerCase()) &&
+          safeEqual(data.password, password),
       );
       if (isConfiguredAdmin) {
         const rootAdmin = await User.findOne({
           email: email.toLowerCase(),
-          role: "admin",
+          role: USER_ROLES.ADMIN,
         }).select("+passwordHash name email avatarUrl role isActive pageAccess authVersion");
         if (!rootAdmin || !rootAdmin.isActive) {
           return res.status(401).json({
@@ -93,8 +95,8 @@ function registerAdminAuthRoutes({
       }
 
       const staff = await User.findOne({
-        email: parsed.data.email.toLowerCase(),
-        role: { $in: ["admin", "employee"] },
+        email: data.email.toLowerCase(),
+        role: { $in: ADMIN_ROLES },
       }).select("+passwordHash");
       if (!staff) {
         return res.status(401).json({
@@ -113,11 +115,7 @@ function registerAdminAuthRoutes({
       }
       let passwordMatches = false;
 
-      const actualHash = crypto.scryptSync(parsed.data.password, salt, 64);
-      const expected = Buffer.from(expectedHash, "hex");
-      passwordMatches =
-        expected.length === actualHash.length &&
-        crypto.timingSafeEqual(expected, actualHash);
+      passwordMatches = verifyPassword(data.password, staff.passwordHash);
 
       if (!passwordMatches) {
         return res.status(401).json({ error: "The password is incorrect." });
@@ -151,7 +149,7 @@ function registerAdminAuthRoutes({
       const staff = await User.findById(req.admin.userId)
         .select("name email avatarUrl role isActive pageAccess authVersion")
         .lean();
-      if (!staff || !staff.isActive || !["admin", "employee"].includes(staff.role)) {
+      if (!staff || !staff.isActive || !ADMIN_ROLES.includes(staff.role)) {
         return res.status(401).json({
           error: "This admin account is no longer active. Please sign in again.",
         });

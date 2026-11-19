@@ -1,3 +1,8 @@
+const inventoryService = require("../services/inventoryService");
+const { ORDER_STATUSES } = require("../constants/statuses");
+const { validate } = require("../middleware/validate");
+const { validateObjectId } = require("../middleware/validateObjectId");
+
 function registerAdminOrderRoutes({
   router,
   asyncHandler,
@@ -6,7 +11,6 @@ function registerAdminOrderRoutes({
   Product,
   InventoryLog,
   orderStatusSchema,
-  validId,
   invalid,
 }) {
   router.get(
@@ -19,74 +23,34 @@ function registerAdminOrderRoutes({
   );
   router.patch(
     "/orders/:id",
+    validateObjectId("id", { message: "Invalid order ID." }),
+    validate(orderStatusSchema, { onInvalid: invalid }),
     asyncHandler(async (req, res) => {
-      if (!validId(req.params.id))
-        return res.status(400).json({ error: "Invalid order ID." });
-      const parsed = orderStatusSchema.safeParse(req.body);
-      if (!parsed.success) return invalid(res, parsed);
-
       const existingOrder = await Order.findById(req.params.id);
       if (!existingOrder) return res.status(404).json({ error: "Order not found." });
 
-      const newStatus = parsed.data.status;
+      const newStatus = req.validatedBody.status;
       const oldStatus = existingOrder.status;
 
       // If order was cancelled, restore the stock back to the products
-      if (newStatus === "cancelled" && oldStatus !== "cancelled") {
+      if (newStatus === ORDER_STATUSES[4] && oldStatus !== ORDER_STATUSES[4]) {
         const orderItems = await OrderItem.find({ orderId: existingOrder._id });
-        for (const item of orderItems) {
-          if (!item.productId) continue;
-          const prod = await Product.findById(item.productId).select("stockQty");
-          if (prod) {
-            const before = prod.stockQty || 0;
-            const after = before + item.quantity;
-            await Product.updateOne(
-              { _id: prod._id },
-              { $inc: { stockQty: item.quantity } },
-            );
-            await InventoryLog.create({
-              productId: prod._id,
-              orderId: existingOrder._id,
-              type: "cancel_return",
-              quantityChange: item.quantity,
-              stockBefore: before,
-              stockAfter: after,
-              reason: `Order ${existingOrder.orderNumber} cancelled by admin`,
-            });
-          }
-        }
-      } else if (oldStatus === "cancelled" && newStatus !== "cancelled") {
+        await inventoryService.restoreCancelledOrderStock({
+          Product,
+          InventoryLog,
+          orderItems,
+          order: existingOrder,
+        });
+      } else if (oldStatus === ORDER_STATUSES[4] && newStatus !== ORDER_STATUSES[4]) {
         // If moving out of cancelled status back to active, re-deduct the stock
         const orderItems = await OrderItem.find({ orderId: existingOrder._id });
-        for (const item of orderItems) {
-          if (!item.productId) continue;
-          const prod = await Product.findById(item.productId).select("stockQty");
-          if (prod) {
-            const before = prod.stockQty || 0;
-            const after = Math.max(0, before - item.quantity);
-            await Product.updateOne(
-              { _id: prod._id },
-              [
-                {
-                  $set: {
-                    stockQty: {
-                      $max: [0, { $subtract: ["$stockQty", item.quantity] }],
-                    },
-                  },
-                },
-              ],
-            );
-            await InventoryLog.create({
-              productId: prod._id,
-              orderId: existingOrder._id,
-              type: "sale",
-              quantityChange: -item.quantity,
-              stockBefore: before,
-              stockAfter: after,
-              reason: `Order ${existingOrder.orderNumber} status changed from cancelled to ${newStatus}`,
-            });
-          }
-        }
+        await inventoryService.redeductCancelledOrderStock({
+          Product,
+          InventoryLog,
+          orderItems,
+          order: existingOrder,
+          newStatus,
+        });
       }
 
       existingOrder.status = newStatus;

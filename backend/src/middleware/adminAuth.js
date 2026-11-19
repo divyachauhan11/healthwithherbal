@@ -1,9 +1,7 @@
-const crypto = require("node:crypto");
 const User = require("../models/User");
-
-function sign(value, secret) {
-  return crypto.createHmac("sha256", secret).update(value).digest("base64url");
-}
+const config = require("../config");
+const { ADMIN_ROLES } = require("../constants/roles");
+const { signHmac, safeEqual, verifyHmac } = require("../utils/crypto");
 
 function createAdminToken(email, secret, claims = {}) {
   const payload = Buffer.from(
@@ -13,17 +11,11 @@ function createAdminToken(email, secret, claims = {}) {
       exp: Date.now() + 8 * 60 * 60 * 1000,
     }),
   ).toString("base64url");
-  return `${payload}.${sign(payload, secret)}`;
-}
-
-function safeEqual(left, right) {
-  const a = Buffer.from(left);
-  const b = Buffer.from(right);
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
+  return `${payload}.${signHmac(payload, secret)}`;
 }
 
 async function requireAdmin(req, res, next) {
-  const secret = process.env.ADMIN_SESSION_SECRET;
+  const secret = config.adminSessionSecret;
   if (!secret || secret.length < 32) {
     return res
       .status(503)
@@ -36,7 +28,7 @@ async function requireAdmin(req, res, next) {
       .json({ error: "Sign in to access the admin portal." });
   }
   const [payload, signature] = token.split(".");
-  if (!payload || !signature || !safeEqual(signature, sign(payload, secret))) {
+  if (!payload || !signature || !verifyHmac(payload, signature, secret)) {
     return res
       .status(401)
       .json({ error: "Your admin session is invalid. Please sign in again." });
@@ -60,7 +52,7 @@ async function requireAdmin(req, res, next) {
     if (
       !admin ||
       !admin.isActive ||
-      !["admin", "employee"].includes(admin.role) ||
+      !ADMIN_ROLES.includes(admin.role) ||
       admin.email.toLowerCase() !== String(session.email).toLowerCase() ||
       (Number(admin.authVersion) || 0) !== session.authVersion
     ) {
@@ -73,6 +65,7 @@ async function requireAdmin(req, res, next) {
       email: session.email,
       role: admin.role,
       pageAccess: admin.pageAccess || [],
+      isActive: admin.isActive,
       userId: String(admin._id),
     };
     next();
