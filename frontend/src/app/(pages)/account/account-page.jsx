@@ -31,6 +31,12 @@ import {
 } from "@/lib/api";
 import { ProductReviewModal, ConfirmModal } from "@/components/pages/modals";
 import { FormModal } from "../../../components/admin/global/FormModal";
+import { dateLabelCompact } from "../../../components/admin/global/admin-utils";
+import {
+  ORDER_STATUSES,
+  RETURN_EXCHANGE_STATUSES,
+  RETURN_EXCHANGE_TYPES,
+} from "@/constants/statuses";
 
 const returnRequestMatchesItem = (request, item, itemIndex) => {
   if (Number.isInteger(request.itemIndex)) return request.itemIndex === itemIndex;
@@ -55,7 +61,7 @@ export function AccountPage({
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [reviewModalData, setReviewModalData] = useState(null);
   const [returnRequestData, setReturnRequestData] = useState(null);
-  const [returnRequestType, setReturnRequestType] = useState("return");
+  const [returnRequestType, setReturnRequestType] = useState(RETURN_EXCHANGE_TYPES[0]);
   const [returnRequestQuantity, setReturnRequestQuantity] = useState(1);
   const [returnRequestReason, setReturnRequestReason] = useState("");
   const [savingReturnRequest, setSavingReturnRequest] = useState(false);
@@ -91,7 +97,7 @@ export function AccountPage({
         }
         notify?.("Your request has been submitted for review.");
       } else {
-        const subject = `${returnRequestType === "return" ? "Return" : "Exchange"} request for order ${orderNumber}`;
+        const subject = `${returnRequestType === RETURN_EXCHANGE_TYPES[0] ? "Return" : "Exchange"} request for order ${orderNumber}`;
         const body = `Hello,\n\nI would like to request a ${returnRequestType}.\nOrder: ${orderNumber}\nItem: ${itemTitle}\nQuantity: ${returnRequestQuantity}\nReason: ${returnRequestReason || "Not provided"}\n${photoUrls.length ? `Photo links:\n${photoUrls.join("\n")}\n` : ""}\nPlease let me know the next steps.`;
         window.location.href = `mailto:healthwithherbalindia@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
       }
@@ -469,18 +475,11 @@ export function AccountPage({
                               {order.orderNumber}
                             </span>
                             <span className="order-date-tag">
-                              {new Date(order.createdAt).toLocaleDateString(
-                                "en-IN",
-                                {
-                                  day: "numeric",
-                                  month: "short",
-                                  year: "numeric",
-                                },
-                              )}
+                              {dateLabelCompact(order.createdAt)}
                             </span>
                           </div>
                           <span
-                            className={`order-status-pill status-${order.status || "placed"}`}
+                            className={`order-status-pill status-${order.status || ORDER_STATUSES[0]}`}
                           >
                             {order.status || "Confirmed"}
                           </span>
@@ -505,7 +504,7 @@ export function AccountPage({
                                 </span>
                               </div>
                               {(order.status || "").toLowerCase() ===
-                                "delivered" && (
+                                ORDER_STATUSES[3] && (
                                 <button
                                   type="button"
                                   className="item-review-btn"
@@ -699,7 +698,7 @@ export function AccountPage({
                           </span>
                         </div>
                         <span
-                          className={`order-status-pill status-${order.status || "placed"}`}
+                          className={`order-status-pill status-${order.status || ORDER_STATUSES[0]}`}
                         >
                           {order.status
                             ? order.status.toUpperCase()
@@ -707,7 +706,7 @@ export function AccountPage({
                         </span>
                       </div>
 
-                      {(order.status || "").toLowerCase() === "delivered" && (
+                      {(order.status || "").toLowerCase() === ORDER_STATUSES[3] && (
                         <div
                           className="delivered-review-callout"
                           style={{ margin: "10px 0 14px" }}
@@ -743,10 +742,10 @@ export function AccountPage({
                               {(order.returnExchangeRequests || [])
                                 .filter((request) => returnRequestMatchesItem(request, item, idx))
                                 .map((request) => (
-                                  <div key={request._id} className={`customer-return-status customer-return-status-${request.status || "pending"}`}>
+                                  <div key={request._id} className={`customer-return-status customer-return-status-${request.status || RETURN_EXCHANGE_STATUSES[0]}`}>
                                     <RotateCcw size={13} />
-                                    <span>{request.type === "exchange" ? "Exchange" : "Return"} request</span>
-                                    <strong>{(request.status || "pending").charAt(0).toUpperCase() + (request.status || "pending").slice(1)}</strong>
+                                    <span>{request.type === RETURN_EXCHANGE_TYPES[1] ? "Exchange" : "Return"} request</span>
+                                    <strong>{(request.status || RETURN_EXCHANGE_STATUSES[0]).charAt(0).toUpperCase() + (request.status || RETURN_EXCHANGE_STATUSES[0]).slice(1)}</strong>
                                   </div>
                                 ))}
                             </div>
@@ -764,7 +763,7 @@ export function AccountPage({
                                   item.unitPrice * item.quantity}
                               </div>
                               {(order.status || "").toLowerCase() ===
-                                "delivered" && (
+                                ORDER_STATUSES[3] && (
                                 <>
                                   <button
                                     type="button"
@@ -793,7 +792,7 @@ export function AccountPage({
                                       onClick={() => {
                                         setReturnRequestData({ item, order, itemIndex: idx });
                                         setReturnRequestQuantity(1);
-                                        setReturnRequestType("return");
+                                        setReturnRequestType(RETURN_EXCHANGE_TYPES[0]);
                                         setReturnRequestReason("");
                                         setReturnRequestPhotos([]);
                                       }}
@@ -1054,7 +1053,7 @@ export function AccountPage({
             </p>
             <label>Request type
               <select value={returnRequestType} onChange={(event) => setReturnRequestType(event.target.value)}>
-                <option value="return">Return</option><option value="exchange">Exchange</option>
+                <option value={RETURN_EXCHANGE_TYPES[0]}>Return</option><option value={RETURN_EXCHANGE_TYPES[1]}>Exchange</option>
               </select>
             </label>
             <label>Quantity

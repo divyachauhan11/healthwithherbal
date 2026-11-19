@@ -18,6 +18,7 @@ import {
   PackageCheck,
 } from "lucide-react";
 import { currency } from "./admin-utils";
+import { RETURN_EXCHANGE_STATUSES } from "@/constants/statuses";
 import { StatCard } from "./StatCard";
 
 export function PageStats({
@@ -155,9 +156,9 @@ export function PageStats({
     ];
   } else if (page === "Returns & Exchanges") {
     const requests = allRows.length ? allRows : rows;
-    const pending = requests.filter((request) => request.status === "pending").length;
-    const approved = requests.filter((request) => request.status === "approved").length;
-    const completed = requests.filter((request) => request.status === "completed").length;
+    const pending = requests.filter((request) => request.status === RETURN_EXCHANGE_STATUSES[0]).length;
+    const approved = requests.filter((request) => request.status === RETURN_EXCHANGE_STATUSES[1]).length;
+    const completed = requests.filter((request) => request.status === RETURN_EXCHANGE_STATUSES[3]).length;
 
     cards = [
       {

@@ -14,23 +14,24 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { ADMIN_PAGE_IDS } from "../../../constants/admin-pages";
 
 const navigation = [
-  ["Dashboard", LayoutDashboard],
-  ["Products", Package],
-  ["Low Stock", AlertTriangle],
-  ["Categories", BookOpen],
-  ["Brands", Star],
-  ["Coupons", Tag],
-  ["Reviews", Star],
-  ["Orders", Truck],
-  ["Payments", CreditCard],
-  ["Returns & Exchanges", RotateCcw],
-  ["Customers", Users],
-  ["Blogs", FileText],
-  ["Users", Shield],
-  ["Settings", Settings],
-  ["Profile", Users],
+  [ADMIN_PAGE_IDS.DASHBOARD, LayoutDashboard],
+  [ADMIN_PAGE_IDS.PRODUCTS, Package],
+  [ADMIN_PAGE_IDS.LOW_STOCK, AlertTriangle],
+  [ADMIN_PAGE_IDS.CATEGORIES, BookOpen],
+  [ADMIN_PAGE_IDS.BRANDS, Star],
+  [ADMIN_PAGE_IDS.COUPONS, Tag],
+  [ADMIN_PAGE_IDS.REVIEWS, Star],
+  [ADMIN_PAGE_IDS.ORDERS, Truck],
+  [ADMIN_PAGE_IDS.PAYMENTS, CreditCard],
+  [ADMIN_PAGE_IDS.RETURNS_EXCHANGES, RotateCcw],
+  [ADMIN_PAGE_IDS.CUSTOMERS, Users],
+  [ADMIN_PAGE_IDS.BLOGS, FileText],
+  [ADMIN_PAGE_IDS.USERS, Shield],
+  [ADMIN_PAGE_IDS.SETTINGS, Settings],
+  [ADMIN_PAGE_IDS.PROFILE, Users],
 ];
 
 export function AdminSidebar({
@@ -51,7 +52,7 @@ export function AdminSidebar({
         <div
           className="admin-brand-wrap"
           onClick={() => {
-            setPage("Dashboard");
+            setPage(ADMIN_PAGE_IDS.DASHBOARD);
             setQuery("");
             setSidebarOpen(false);
           }}
@@ -102,7 +103,7 @@ export function AdminSidebar({
         {navigation
           .filter(
             ([label]) =>
-              (label !== "Returns & Exchanges" || returnExchangeEnabled) &&
+              (label !== ADMIN_PAGE_IDS.RETURNS_EXCHANGES || returnExchangeEnabled) &&
               (!allowedPages || allowedPages.includes(label)),
           )
           .map(([label, Icon]) => (
@@ -117,10 +118,10 @@ export function AdminSidebar({
             >
               <Icon size={18} />
               <span>{label}</span>
-              {label === "Orders" && pendingOrders > 0 && (
+              {label === ADMIN_PAGE_IDS.ORDERS && pendingOrders > 0 && (
                 <em>{pendingOrders}</em>
               )}
-              {label === "Returns & Exchanges" && pendingReturns > 0 && (
+              {label === ADMIN_PAGE_IDS.RETURNS_EXCHANGES && pendingReturns > 0 && (
                 <em>{pendingReturns}</em>
               )}
             </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   CalendarDays,
   CreditCard,
@@ -13,6 +13,8 @@ import {
   X,
 } from "lucide-react";
 import { adminRequest } from "@/lib/admin-api";
+import { ORDER_STATUSES, PAYMENT_STATUSES } from "@/constants/statuses";
+import { useAsyncResource } from "@/hooks";
 
 const money = (amount, currency = "INR") => {
   const value = Number(amount) || 0;
@@ -50,20 +52,18 @@ const addressText = (address) => {
 };
 
 export default function CustomerDetailsModal({ customer: listCustomer, token, onClose }) {
-  const [details, setDetails] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    setError("");
-    adminRequest(`/customers/detail/${encodeURIComponent(listCustomer.email)}`, { token })
-      .then((result) => { if (active) setDetails(result); })
-      .catch((requestError) => { if (active) setError(requestError.message || "Could not load customer details."); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [listCustomer.email, token]);
+  const loadCustomer = useCallback(
+    () => adminRequest(`/customers/detail/${encodeURIComponent(listCustomer.email)}`, { token }),
+    [listCustomer.email, token],
+  );
+  const { data: details, loading, error } = useAsyncResource({
+    load: loadCustomer,
+    deps: [listCustomer.email, token],
+    enabled: true,
+    initialData: null,
+    clearErrorOnLoad: true,
+    errorMessage: (requestError) => requestError.message || "Could not load customer details.",
+  });
 
   useEffect(() => {
     const closeOnEscape = (event) => {
@@ -155,7 +155,7 @@ export default function CustomerDetailsModal({ customer: listCustomer, token, on
                     <article className="customer-order-card" key={order._id}>
                       <div className="customer-order-heading">
                         <div><strong>{order.orderNumber || `Order ${String(order._id).slice(-7)}`}</strong><small>{dateTime(order.createdAt)}</small></div>
-                        <span className={`customer-order-status ${order.status || "placed"}`}>{order.status || "placed"}</span>
+                        <span className={`customer-order-status ${order.status || ORDER_STATUSES[0]}`}>{order.status || ORDER_STATUSES[0]}</span>
                       </div>
                       <div className="customer-order-items">
                         {(order.items || []).map((item, index) => (
@@ -176,7 +176,7 @@ export default function CustomerDetailsModal({ customer: listCustomer, token, on
                           <div className="customer-payment-row" key={payment._id}>
                             <CreditCard size={15} />
                             <div><strong>{String(payment.method || order.paymentMethod || "Payment").replaceAll("_", " ")}</strong><small>{payment.gateway ? `${payment.gateway} · ` : ""}{payment.gatewayTxnId ? `Txn ${payment.gatewayTxnId} · ` : ""}{payment.paidAt ? `Paid ${dateTime(payment.paidAt)}` : `Updated ${dateTime(payment.updatedAt || payment.createdAt)}`}</small></div>
-                            <span className={`customer-payment-status ${payment.status || "pending"}`}>{payment.status || "pending"}</span>
+                            <span className={`customer-payment-status ${payment.status || PAYMENT_STATUSES[0]}`}>{payment.status || PAYMENT_STATUSES[0]}</span>
                             <b>{money(payment.amount, payment.currency || order.currency)}</b>
                           </div>
                         )) : (

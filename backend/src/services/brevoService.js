@@ -1,5 +1,6 @@
 const config = require("../config");
 const { escapeHtml } = require("../utils/string");
+const { readJsonResponse } = require("../utils/http");
 
 /**
  * Brevo (Sendinblue) Transactional Email Service
@@ -71,7 +72,7 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, textConte
       body: JSON.stringify(payload),
     });
 
-    const data = await response.json().catch(() => ({}));
+    const data = await readJsonResponse(response, "Brevo");
 
     if (!response.ok) {
       console.error("❌ [Brevo API Error]", {
@@ -94,7 +95,11 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, textConte
     );
     return { success: true, messageId: data.messageId };
   } catch (error) {
-    console.error("❌ Error sending email via Brevo:", error.message);
+    console.error("❌ Error sending email via Brevo:", {
+      message: error.message,
+      status: error.status,
+      contentType: error.contentType,
+    });
     throw error;
   }
 }

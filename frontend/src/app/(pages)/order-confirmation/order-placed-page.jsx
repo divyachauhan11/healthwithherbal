@@ -26,41 +26,47 @@ import {
   getOrderLiveStreamUrl,
 } from "@/lib/api";
 import { ProductReviewModal } from "@/components/pages/modals";
+import {
+  ORDER_STATUSES,
+  REFUND_STATUSES,
+  RETURN_EXCHANGE_STATUSES,
+  RETURN_EXCHANGE_TYPES,
+} from "@/constants/statuses";
 
 const STAGES = [
   {
-    key: "placed",
+    key: ORDER_STATUSES[0],
     name: "Order Placed",
-    timeText: (status) => (status === "placed" ? "Just now" : "Confirmed"),
+    timeText: (status) => (status === ORDER_STATUSES[0] ? "Just now" : "Confirmed"),
     icon: CheckCircle2,
   },
   {
-    key: "processing",
+    key: ORDER_STATUSES[1],
     name: "Packed & Blessed",
     timeText: (status) =>
-      status === "placed"
+      status === ORDER_STATUSES[0]
         ? "Within 24 hours"
-        : status === "processing"
+        : status === ORDER_STATUSES[1]
           ? "Packing & quality check"
           : "Completed",
     icon: Package,
   },
   {
-    key: "shipped",
+    key: ORDER_STATUSES[2],
     name: "In Transit",
     timeText: (status) =>
-      status === "shipped"
+      status === ORDER_STATUSES[2]
         ? "On the way to you"
-        : status === "delivered"
+        : status === ORDER_STATUSES[3]
           ? "Arrived"
           : "2-4 business days",
     icon: Truck,
   },
   {
-    key: "delivered",
+    key: ORDER_STATUSES[3],
     name: "Delivered",
     timeText: (status) =>
-      status === "delivered"
+      status === ORDER_STATUSES[3]
         ? "Delivered to your doorstep"
         : "To your doorstep",
     icon: CheckCircle2,
@@ -68,27 +74,27 @@ const STAGES = [
 ];
 
 const getStageState = (stageIndex, status) => {
-  if (status === "cancelled") {
+  if (status === ORDER_STATUSES[4]) {
     return { isCompleted: false, isCurrent: false, isPending: true };
   }
-  if (status === "delivered") {
+  if (status === ORDER_STATUSES[3]) {
     return { isCompleted: true, isCurrent: false, isPending: false };
   }
-  if (status === "shipped") {
+  if (status === ORDER_STATUSES[2]) {
     if (stageIndex < 2)
       return { isCompleted: true, isCurrent: false, isPending: false };
     if (stageIndex === 2)
       return { isCompleted: false, isCurrent: true, isPending: false };
     return { isCompleted: false, isCurrent: false, isPending: true };
   }
-  if (status === "processing") {
+  if (status === ORDER_STATUSES[1]) {
     if (stageIndex === 0)
       return { isCompleted: true, isCurrent: false, isPending: false };
     if (stageIndex === 1)
       return { isCompleted: false, isCurrent: true, isPending: false };
     return { isCompleted: false, isCurrent: false, isPending: true };
   }
-  // status === "placed" (Initial stage: Step 0 confirmed, Step 1 in-progress/packing)
+  // Initial placed stage: Step 0 confirmed, Step 1 in-progress/packing.
   if (stageIndex === 0)
     return { isCompleted: true, isCurrent: false, isPending: false };
   if (stageIndex === 1)
@@ -97,9 +103,9 @@ const getStageState = (stageIndex, status) => {
 };
 
 const isDividerActive = (dividerIndex, status) => {
-  if (status === "cancelled") return false;
-  if (status === "delivered") return true;
-  if (status === "shipped") return dividerIndex <= 1;
+  if (status === ORDER_STATUSES[4]) return false;
+  if (status === ORDER_STATUSES[3]) return true;
+  if (status === ORDER_STATUSES[2]) return dividerIndex <= 1;
   return dividerIndex === 0;
 };
 
@@ -120,36 +126,36 @@ const isRequestForOrderItem = (request, item, itemIndex) => {
 const statusLabel = (value) => value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : "Pending";
 
 function ReturnExchangeProgress({ request }) {
-  const requestStatus = request.status || "pending";
-  const rejected = requestStatus === "rejected";
+  const requestStatus = request.status || RETURN_EXCHANGE_STATUSES[0];
+  const rejected = requestStatus === RETURN_EXCHANGE_STATUSES[2];
   const steps = [
     { label: "Request submitted", state: "complete", detail: "Received" },
     {
       label: "Admin review",
-      state: requestStatus === "pending" ? "current" : rejected ? "rejected" : "complete",
-      detail: rejected ? "Rejected" : requestStatus === "pending" ? "Under review" : "Reviewed",
+      state: requestStatus === RETURN_EXCHANGE_STATUSES[0] ? "current" : rejected ? "rejected" : "complete",
+      detail: rejected ? "Rejected" : requestStatus === RETURN_EXCHANGE_STATUSES[0] ? "Under review" : "Reviewed",
     },
     {
-      label: request.type === "exchange" ? "Exchange resolution" : "Return resolution",
-      state: requestStatus === "approved" ? "current" : requestStatus === "completed" ? "complete" : "pending",
-      detail: requestStatus === "approved" ? "In progress" : requestStatus === "completed" ? "Completed" : rejected ? "Not continued" : "Waiting",
+      label: request.type === RETURN_EXCHANGE_TYPES[1] ? "Exchange resolution" : "Return resolution",
+      state: requestStatus === RETURN_EXCHANGE_STATUSES[1] ? "current" : requestStatus === RETURN_EXCHANGE_STATUSES[3] ? "complete" : "pending",
+      detail: requestStatus === RETURN_EXCHANGE_STATUSES[1] ? "In progress" : requestStatus === RETURN_EXCHANGE_STATUSES[3] ? "Completed" : rejected ? "Not continued" : "Waiting",
     },
   ];
-  const refundLabel = request.type === "exchange"
+  const refundLabel = request.type === RETURN_EXCHANGE_TYPES[1]
     ? "Not applicable"
-    : request.refundStatus === "processed"
+    : request.refundStatus === REFUND_STATUSES[2]
       ? "Completed"
-      : request.refundStatus === "not_required" ? "Not required" : "Pending";
-  const refundClass = request.type === "exchange" || request.refundStatus === "not_required"
+      : request.refundStatus === REFUND_STATUSES[0] ? "Not required" : "Pending";
+  const refundClass = request.type === RETURN_EXCHANGE_TYPES[1] || request.refundStatus === REFUND_STATUSES[0]
     ? "not-required"
-    : request.refundStatus === "processed" ? "complete" : "pending";
+    : request.refundStatus === REFUND_STATUSES[2] ? "complete" : "pending";
   const itemTitle = request.item?.title || "Requested item";
 
   return (
     <article className="return-exchange-progress-card">
       <div className="return-exchange-progress-heading">
         <div>
-          <strong>{request.type === "exchange" ? "Exchange" : "Return"} · {itemTitle}</strong>
+          <strong>{request.type === RETURN_EXCHANGE_TYPES[1] ? "Exchange" : "Return"} · {itemTitle}</strong>
           <span>Request status: {statusLabel(requestStatus)}</span>
         </div>
         <span className={`return-progress-refund refund-${refundClass}`}>
@@ -224,7 +230,7 @@ export function OrderPlacedPage({
   const displayOrder =
     liveOrderData && rawOrder ? { ...rawOrder, ...liveOrderData } : rawOrder;
 
-  const currentStatus = (displayOrder?.status || "placed").toLowerCase();
+  const currentStatus = (displayOrder?.status || ORDER_STATUSES[0]).toLowerCase();
 
   // Real-time synchronization with admin status changes
   useEffect(() => {
@@ -525,7 +531,7 @@ export function OrderPlacedPage({
           </div>
         </div>
 
-        {currentStatus === "cancelled" ? (
+        {currentStatus === ORDER_STATUSES[4] ? (
           <div className="order-cancelled-box">
             <XCircle size={22} color="#dc2626" />
             <div>
@@ -607,7 +613,7 @@ export function OrderPlacedPage({
               </span>
             </div>
 
-            {currentStatus === "delivered" && (
+            {currentStatus === ORDER_STATUSES[3] && (
               <div className="delivered-review-callout">
                 <div className="callout-icon-box">
                   <Sparkles size={18} color="#15803d" />
@@ -659,7 +665,7 @@ export function OrderPlacedPage({
                       <span className="item-qty-tag">
                         Quantity: {item.quantity}
                       </span>
-                      {currentStatus === "delivered" && (
+                      {currentStatus === ORDER_STATUSES[3] && (
                         <button
                           type="button"
                           className="item-review-btn"
@@ -675,14 +681,14 @@ export function OrderPlacedPage({
                       .filter((request) => isRequestForOrderItem(request, item, idx))
                       .map((request) => (
                         <div className="order-item-return-status" key={request._id}>
-                          <div className={`order-item-return-request order-request-${request.status || "pending"}`}>
+                          <div className={`order-item-return-request order-request-${request.status || RETURN_EXCHANGE_STATUSES[0]}`}>
                             <RotateCcw size={14} />
-                            <span>{request.type === "exchange" ? "Exchange" : "Return"} request</span>
-                            <strong>{statusLabel(request.status || "pending")}</strong>
+                            <span>{request.type === RETURN_EXCHANGE_TYPES[1] ? "Exchange" : "Return"} request</span>
+                            <strong>{statusLabel(request.status || RETURN_EXCHANGE_STATUSES[0])}</strong>
                           </div>
-                          <div className={`order-item-refund-status order-refund-${request.refundStatus || "pending"}`}>
+                          <div className={`order-item-refund-status order-refund-${request.refundStatus || REFUND_STATUSES[1]}`}>
                             <span>Refund</span>
-                            <strong>{request.refundStatus === "processed" ? "Completed" : request.refundStatus === "not_required" ? "Not required" : "Pending"}</strong>
+                            <strong>{request.refundStatus === REFUND_STATUSES[2] ? "Completed" : request.refundStatus === REFUND_STATUSES[0] ? "Not required" : "Pending"}</strong>
                           </div>
                         </div>
                       ))}
@@ -861,7 +867,7 @@ export function OrderPlacedPage({
       {/* =================================================================== */}
       {/* BOTTOM ACTIONS                                                      */}
       {/* =================================================================== */}
-      {detailMode && currentStatus === "delivered" && (
+      {detailMode && currentStatus === ORDER_STATUSES[3] && (
         <section className="return-exchange-panel">
           <div>
             <span className="return-exchange-eyebrow">
@@ -885,7 +891,7 @@ export function OrderPlacedPage({
         </section>
       )}
       <div className="order-placed-actions-row">
-        {detailMode && currentStatus === "delivered" && (
+        {detailMode && currentStatus === ORDER_STATUSES[3] && (
           <button
             type="button"
             className="app-button continue-btn"

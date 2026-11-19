@@ -1,4 +1,5 @@
 "use client";
+import { clearCustomerSession, getCartSessionId, getCustomerSession, saveCustomerSession } from "@/lib/session";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Check } from "lucide-react";
@@ -123,14 +124,12 @@ export default function App() {
 
   useEffect(() => {
     try {
-      const stored = localStorage.getItem("hwh_user");
-      const token = localStorage.getItem("hwh_session_token");
+      const { user: stored, token } = getCustomerSession();
       localStorage.removeItem("hwh_wishlist");
       if (stored && token) {
         setCurrentUser(JSON.parse(stored));
       } else {
-        localStorage.removeItem("hwh_user");
-        localStorage.removeItem("hwh_session_token");
+        clearCustomerSession();
       }
     } catch (e) {
       console.warn("Could not load stored user session:", e);
@@ -164,9 +163,7 @@ export default function App() {
     setCurrentUser(user);
     try {
       if (user) {
-        if (user.sessionToken) localStorage.setItem("hwh_session_token", user.sessionToken);
-        const { sessionToken, ...safeUser } = user;
-        localStorage.setItem("hwh_user", JSON.stringify(safeUser));
+        saveCustomerSession(user);
       }
     } catch (e) {}
     notify(`Welcome back, ${user?.name || "Seeker"}!`);
@@ -176,8 +173,7 @@ export default function App() {
     setWishlist([]);
     setCurrentUser(null);
     try {
-      localStorage.removeItem("hwh_user");
-      localStorage.removeItem("hwh_session_token");
+      clearCustomerSession();
     } catch (e) {}
     notify("You have been signed out.");
   };
@@ -315,8 +311,7 @@ export default function App() {
     const normalizeIds = (values) => (Array.isArray(values) ? values : [])
       .filter((id) => typeof id === "string" || typeof id === "number")
       .map((id) => /^\d+$/.test(String(id)) ? Number(id) : String(id));
-    const sessionId = localStorage.getItem("hwh_cart_session") || `sess_${window.crypto?.randomUUID?.() || Math.random().toString(36).slice(2, 14)}`;
-    localStorage.setItem("hwh_cart_session", sessionId);
+    const sessionId = getCartSessionId("storefront");
     setCartSessionId(sessionId);
 
     const queryCart = new URLSearchParams(window.location.search).get("cart");

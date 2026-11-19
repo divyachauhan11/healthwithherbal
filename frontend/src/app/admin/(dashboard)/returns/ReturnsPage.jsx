@@ -4,27 +4,16 @@ import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpRight, Banknote, CalendarDays, ClipboardList, ExternalLink, Package, RotateCcw, UserRound, X } from "lucide-react";
 import { adminRequest } from "@/lib/admin-api";
+import {
+  REFUND_STATUSES,
+  RETURN_EXCHANGE_STATUSES,
+  RETURN_EXCHANGE_TYPES,
+} from "@/constants/statuses";
 import { DashboardPanel } from "@/components/admin/dashboard";
 import { PageStats, SearchField } from "@/components/admin/global";
 import { DataTable } from "@/components/admin/tables";
+import { currencyFixed, dateLabel } from "@/components/admin/global/admin-utils";
 import { ReturnRequestFilterBar } from "./ReturnRequestFilterBar";
-
-const dateLabel = (value) =>
-  value
-    ? new Intl.DateTimeFormat("en-IN", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      }).format(new Date(value))
-    : "—";
-
-const money = (value) =>
-  new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(value) || 0);
 
 function ReturnReviewModal({ request, saving, onClose, onSave }) {
   const [form, setForm] = useState({});
@@ -32,9 +21,9 @@ function ReturnReviewModal({ request, saving, onClose, onSave }) {
   useEffect(() => {
     if (!request) return;
     setForm({
-      status: request.status || "pending",
+      status: request.status || RETURN_EXCHANGE_STATUSES[0],
       adminNote: request.adminNote || "",
-      refundStatus: request.refundStatus || "pending",
+      refundStatus: request.refundStatus || REFUND_STATUSES[1],
       refundAmount: request.refundAmount ?? "",
       refundMethod: request.refundMethod || "not_applicable",
       refundReference: request.refundReference || "",
@@ -63,14 +52,9 @@ function ReturnReviewModal({ request, saving, onClose, onSave }) {
     address?.postalCode,
     address?.country,
   ].filter(Boolean).join(", ") || "No address provided";
-  const orderMoney = (value) => new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: order?.currency || "INR",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Number(value) || 0);
-  const isReturnRequest = String(request.type || "return").toLowerCase() === "return";
-  const tracksRefund = (form.refundStatus || "not_required") !== "not_required";
+  const orderMoney = (value) => currencyFixed(value, order?.currency || "INR");
+  const isReturnRequest = String(request.type || RETURN_EXCHANGE_TYPES[0]).toLowerCase() === RETURN_EXCHANGE_TYPES[0];
+  const tracksRefund = (form.refundStatus || REFUND_STATUSES[0]) !== REFUND_STATUSES[0];
   const update = (name) => (event) => setForm((current) => ({ ...current, [name]: event.target.value }));
 
   return createPortal(
@@ -90,12 +74,12 @@ function ReturnReviewModal({ request, saving, onClose, onSave }) {
             <section className="return-review-summary">
               <article><span><CalendarDays size={14} /> Submitted</span><strong>{dateLabel(request.createdAt)}</strong></article>
               <article><span><UserRound size={14} /> Customer</span><strong>{customerName}</strong><small>{request.customer?.email || "Email not provided"}</small></article>
-              <article><span><Package size={14} /> Requested item</span><strong>{itemName}</strong><small>{request.quantity || 1} × {money(unitPrice)}</small></article>
-              <article><span><ClipboardList size={14} /> Request type</span><strong className="return-review-type">{request.type || "return"}</strong><small>Order #{request.orderNumber}</small></article>
+              <article><span><Package size={14} /> Requested item</span><strong>{itemName}</strong><small>{request.quantity || 1} × {currencyFixed(unitPrice)}</small></article>
+              <article><span><ClipboardList size={14} /> Request type</span><strong className="return-review-type">{request.type || RETURN_EXCHANGE_TYPES[0]}</strong><small>Order #{request.orderNumber}</small></article>
             </section>
 
             <section className="return-review-order-card">
-              <div className="return-review-section-heading"><div><span>Order overview</span><h3>Complete order details</h3></div><span className={`returns-status status-${order?.status || "pending"}`}>{order?.status || "Order unavailable"}</span></div>
+              <div className="return-review-section-heading"><div><span>Order overview</span><h3>Complete order details</h3></div><span className={`returns-status status-${order?.status || RETURN_EXCHANGE_STATUSES[0]}`}>{order?.status || "Order unavailable"}</span></div>
               {order ? <>
                 <div className="return-review-order-grid">
                   <article><span>Order number</span><strong>#{order.orderNumber || request.orderNumber}</strong></article>
@@ -159,8 +143,8 @@ function ReturnReviewModal({ request, saving, onClose, onSave }) {
               <div className="return-review-section-heading"><div><span>Resolution</span><h3>Update request</h3></div><span className={`returns-status status-${form.status}`}>{form.status}</span></div>
               <div className="return-review-fields">
                 <label>Request status
-                  <select required value={form.status || "pending"} onChange={update("status")}>
-                    <option value="pending">Pending</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="completed">Completed</option>
+                  <select required value={form.status || RETURN_EXCHANGE_STATUSES[0]} onChange={update("status")}>
+                    <option value={RETURN_EXCHANGE_STATUSES[0]}>Pending</option><option value={RETURN_EXCHANGE_STATUSES[1]}>Approved</option><option value={RETURN_EXCHANGE_STATUSES[2]}>Rejected</option><option value={RETURN_EXCHANGE_STATUSES[3]}>Completed</option>
                   </select>
                 </label>
                 <label className="return-review-note">Internal admin note
@@ -173,17 +157,17 @@ function ReturnReviewModal({ request, saving, onClose, onSave }) {
             <section className={`return-review-refund${isReturnRequest ? "" : " return-review-refund-disabled"}`} aria-disabled={!isReturnRequest}>
               <div className="return-review-section-heading">
                 <div><span><Banknote size={14} /> Refund tracking</span><h3>Record refund details</h3></div>
-                <strong className="return-review-suggested">Item value · {money(suggestedRefund)}</strong>
+                <strong className="return-review-suggested">Item value · {currencyFixed(suggestedRefund)}</strong>
               </div>
               <p className="return-review-refund-help">{isReturnRequest ? "Tracking only. Saving this information does not transfer money or issue a refund." : "Refund tracking is only available for return requests. This exchange request does not require a refund."}</p>
               <div className="return-review-fields return-review-refund-fields">
                 <label>Refund status
-                  <select required={isReturnRequest} disabled={!isReturnRequest} value={form.refundStatus || "not_required"} onChange={(event) => setForm((current) => ({
+                  <select required={isReturnRequest} disabled={!isReturnRequest} value={form.refundStatus || REFUND_STATUSES[0]} onChange={(event) => setForm((current) => ({
                     ...current,
                     refundStatus: event.target.value,
-                    ...(event.target.value === "not_required" ? { refundAmount: 0, refundMethod: "not_applicable" } : {}),
+                    ...(event.target.value === REFUND_STATUSES[0] ? { refundAmount: 0, refundMethod: "not_applicable" } : {}),
                   }))}>
-                    <option value="not_required">No refund required</option><option value="pending">Refund pending</option><option value="processed">Refund completed</option>
+                    <option value={REFUND_STATUSES[0]}>No refund required</option><option value={REFUND_STATUSES[1]}>Refund pending</option><option value={REFUND_STATUSES[2]}>Refund completed</option>
                   </select>
                 </label>
                 <label>Refund amount
@@ -231,9 +215,9 @@ export default function ReturnsPage({
   const counts = useMemo(
     () => ({
       all: rows.length,
-      pending: rows.filter((row) => row.status === "pending").length,
-      approved: rows.filter((row) => row.status === "approved").length,
-      completed: rows.filter((row) => row.status === "completed").length,
+      pending: rows.filter((row) => row.status === RETURN_EXCHANGE_STATUSES[0]).length,
+      approved: rows.filter((row) => row.status === RETURN_EXCHANGE_STATUSES[1]).length,
+      completed: rows.filter((row) => row.status === RETURN_EXCHANGE_STATUSES[3]).length,
     }),
     [rows],
   );
@@ -243,9 +227,9 @@ export default function ReturnsPage({
     const dateKey = requestedDate && !Number.isNaN(requestedDate.getTime())
       ? `${requestedDate.getFullYear()}-${String(requestedDate.getMonth() + 1).padStart(2, "0")}-${String(requestedDate.getDate()).padStart(2, "0")}`
       : "";
-    const rowRefundStatus = row.refundStatus || "pending";
+    const rowRefundStatus = row.refundStatus || REFUND_STATUSES[1];
     return (filter === "all" || row.status === filter) &&
-      (typeFilter === "all" || String(row.type || "return").toLowerCase() === typeFilter) &&
+      (typeFilter === "all" || String(row.type || RETURN_EXCHANGE_TYPES[0]).toLowerCase() === typeFilter) &&
       (refundFilter === "all" || rowRefundStatus === refundFilter) &&
       (!dateFrom || (dateKey && dateKey >= dateFrom)) &&
       (!dateTo || (dateKey && dateKey <= dateTo)) &&
@@ -278,7 +262,7 @@ export default function ReturnsPage({
       render: (row) => (
         <>
           <strong>#{String(row._id).slice(-7).toUpperCase()}</strong>
-          <small className={`returns-type-tag returns-type-${String(row.type || "return").toLowerCase()}`}>{String(row.type || "return").toLowerCase()} request</small>
+          <small className={`returns-type-tag returns-type-${String(row.type || RETURN_EXCHANGE_TYPES[0]).toLowerCase()}`}>{String(row.type || RETURN_EXCHANGE_TYPES[0]).toLowerCase()} request</small>
           <small>Order #{row.orderNumber}</small>
         </>
       ),
@@ -300,7 +284,7 @@ export default function ReturnsPage({
         <>
           <strong>{row.item?.title}</strong>
           <small>
-            {row.quantity} × {money(row.item?.unitPrice)}
+            {row.quantity} × {currencyFixed(row.item?.unitPrice)}
           </small>
         </>
       ),
@@ -318,10 +302,10 @@ export default function ReturnsPage({
       label: "Refund",
       render: (row) => (
         <>
-          <span className={`returns-status refund-status-${row.refundStatus || "pending"}`}>
-            {row.refundStatus === "processed" ? "Refund completed" : row.refundStatus === "pending" || !row.refundStatus ? "Refund pending" : "No refund required"}
+          <span className={`returns-status refund-status-${row.refundStatus || REFUND_STATUSES[1]}`}>
+            {row.refundStatus === REFUND_STATUSES[2] ? "Refund completed" : row.refundStatus === REFUND_STATUSES[1] || !row.refundStatus ? "Refund pending" : "No refund required"}
           </span>
-          {Number(row.refundAmount) > 0 && <small>{money(row.refundAmount)}</small>}
+          {Number(row.refundAmount) > 0 && <small>{currencyFixed(row.refundAmount)}</small>}
         </>
       ),
     },

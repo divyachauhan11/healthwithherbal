@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { CheckCircle2, ImagePlus, X } from "lucide-react";
 import { submitReturnExchangeEmail, uploadReturnExchangePhotos } from "@/lib/api";
 import { currency, dateLabel } from "@/components/admin/global/admin-utils";
+import { RETURN_EXCHANGE_TYPES } from "@/constants/statuses";
 
 export function ReturnExchangeRequestModal({
   order,
@@ -12,7 +13,7 @@ export function ReturnExchangeRequestModal({
   initialItemIndex,
   onClose,
 }) {
-  const [requestType, setRequestType] = useState("return");
+  const [requestType, setRequestType] = useState(RETURN_EXCHANGE_TYPES[0]);
   const [productChoice, setProductChoice] = useState(
     initialItemIndex == null ? "" : String(initialItemIndex),
   );
@@ -107,9 +108,9 @@ export function ReturnExchangeRequestModal({
               <input
                 type="radio"
                 name="requestType"
-                value="return"
-                checked={requestType === "return"}
-                onChange={() => setRequestType("return")}
+                value={RETURN_EXCHANGE_TYPES[0]}
+                checked={requestType === RETURN_EXCHANGE_TYPES[0]}
+                onChange={() => setRequestType(RETURN_EXCHANGE_TYPES[0])}
               />
               <span>Return for refund</span>
             </label>
@@ -117,9 +118,9 @@ export function ReturnExchangeRequestModal({
               <input
                 type="radio"
                 name="requestType"
-                value="exchange"
-                checked={requestType === "exchange"}
-                onChange={() => setRequestType("exchange")}
+                value={RETURN_EXCHANGE_TYPES[1]}
+                checked={requestType === RETURN_EXCHANGE_TYPES[1]}
+                onChange={() => setRequestType(RETURN_EXCHANGE_TYPES[1])}
               />
               <span>Exchange (subject to confirmation)</span>
             </label>

@@ -2,20 +2,25 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Check, ChevronDown } from "lucide-react";
+import {
+  REFUND_STATUSES,
+  RETURN_EXCHANGE_STATUSES,
+  RETURN_EXCHANGE_TYPES,
+} from "@/constants/statuses";
 
 const requestStatuses = [
   ["all", "All request statuses"],
-  ["pending", "Pending"],
-  ["approved", "Approved"],
-  ["rejected", "Rejected"],
-  ["completed", "Completed"],
+  [RETURN_EXCHANGE_STATUSES[0], "Pending"],
+  [RETURN_EXCHANGE_STATUSES[1], "Approved"],
+  [RETURN_EXCHANGE_STATUSES[2], "Rejected"],
+  [RETURN_EXCHANGE_STATUSES[3], "Completed"],
 ];
 
 const refundStatuses = [
   ["all", "All refund statuses"],
-  ["pending", "Refund pending"],
-  ["processed", "Refund completed"],
-  ["not_required", "No refund required"],
+  [REFUND_STATUSES[1], "Refund pending"],
+  [REFUND_STATUSES[2], "Refund completed"],
+  [REFUND_STATUSES[0], "No refund required"],
 ];
 
 function FilterDropdown({ label, value, options, onChange }) {
@@ -96,13 +101,13 @@ export function ReturnRequestFilterBar({
         label="Request type"
         value={requestType}
         onChange={onRequestTypeChange}
-        options={[["all", "All types"], ["return", "Returns"], ["exchange", "Exchanges"]]}
+        options={[["all", "All types"], [RETURN_EXCHANGE_TYPES[0], "Returns"], [RETURN_EXCHANGE_TYPES[1], "Exchanges"]]}
       />
       <FilterDropdown
         label="Request status"
         value={requestStatus}
         onChange={onRequestStatusChange}
-        options={requestStatuses.map(([value, label]) => [value, value === "pending" && pendingCount ? `${label} (${pendingCount})` : label])}
+        options={requestStatuses.map(([value, label]) => [value, value === RETURN_EXCHANGE_STATUSES[0] && pendingCount ? `${label} (${pendingCount})` : label])}
       />
       <FilterDropdown
         label="Refund status"

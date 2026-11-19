@@ -1,4 +1,5 @@
 "use client";
+import { getCartSessionId } from "@/lib/session";
 import { useState, useMemo, useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
@@ -293,10 +294,7 @@ export function CartDrawer({
   const syncTimeoutRef = useRef(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const sessionId =
-      localStorage.getItem("hwh_cart_session") ||
-      `sess_${Math.random().toString(36).slice(2, 12)}`;
-    localStorage.setItem("hwh_cart_session", sessionId);
+    const sessionId = getCartSessionId("cartDrawer");
 
     // Debounced sync to avoid excessive calls
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);

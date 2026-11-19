@@ -4,6 +4,19 @@ import { useEffect, useMemo, useState } from "react";
 import { Check, X } from "lucide-react";
 import { adminRequest } from "../../lib/admin-api";
 import {
+  ADMIN_PAGE_DESCRIPTIONS,
+  ADMIN_PAGE_IDS,
+  ADMIN_PAGE_LIST,
+} from "../../constants/admin-pages";
+import { RETURN_EXCHANGE_STATUSES } from "../../constants/statuses";
+import {
+  clearAdminSession,
+  getAdminSessionToken,
+  getAdminUser,
+  saveAdminSession,
+  saveAdminUser,
+} from "../../lib/session";
+import {
   Login,
   PageStats,
   AdminSidebar,
@@ -29,24 +42,6 @@ import {
   LowStockPage,
 } from "./pages";
 
-const VALID_PAGES = [
-  "Dashboard",
-  "Products",
-  "Low Stock",
-  "Categories",
-  "Brands",
-  "Orders",
-  "Payments",
-  "Returns & Exchanges",
-  "Coupons",
-  "Reviews",
-  "Customers",
-  "Blogs",
-  "Users",
-  "Settings",
-  "Profile",
-];
-
 const normalizePageKey = (value) => String(value || "")
   .toLowerCase()
   .replace(/\s*&\s*/g, "-and-")
@@ -55,7 +50,7 @@ const normalizePageKey = (value) => String(value || "")
 
 const getValidPageName = (candidate) => {
   if (!candidate || typeof candidate !== "string") return null;
-  const match = VALID_PAGES.find(
+  const match = ADMIN_PAGE_LIST.find(
     (p) => normalizePageKey(p) === normalizePageKey(candidate),
   );
   return match || null;
@@ -79,22 +74,10 @@ const getLoginErrorMessage = (error) => {
 
 const clearStoredAdminSession = () => {
   try {
-    window.localStorage.removeItem("hwh-admin-session");
-    window.localStorage.removeItem("hwh-admin-user");
+    clearAdminSession();
   } catch {
     // Storage can be unavailable in private or restricted browser contexts.
   }
-};
-
-const pageDescriptions = {
-  Dashboard: "Here’s what’s happening with your store today.",
-  Products: "Manage inventory, pricing and product visibility.",
-  "Low Stock":
-    "Monitor, restock, and manage products with inventory below 10 units.",
-  Orders: "Track, fulfil and manage customer orders.",
-  Payments: "Review payment collection, transactions and refunds.",
-  "Returns & Exchanges": "Review and resolve customer return and exchange requests.",
-  Customers: "Understand customer activity and purchase history.",
 };
 
 export default function AdminPortal() {
@@ -103,7 +86,7 @@ export default function AdminPortal() {
   const [sessionReady, setSessionReady] = useState(false);
   const [sessionCheckError, setSessionCheckError] = useState("");
   const [page, setPage] = useState(() => {
-    if (typeof window === "undefined") return "Dashboard";
+    if (typeof window === "undefined") return ADMIN_PAGE_IDS.DASHBOARD;
     try {
       const params = new URLSearchParams(window.location.search);
       const paramPage = params.get("page") || params.get("tab");
@@ -157,11 +140,11 @@ export default function AdminPortal() {
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem("hwh-admin-session");
+      const saved = getAdminSessionToken();
       if (saved) {
         setToken(saved);
         setUser(
-          JSON.parse(window.localStorage.getItem("hwh-admin-user") || "null"),
+          JSON.parse(getAdminUser() || "null"),
         );
       } else {
         setSessionReady(true);
@@ -200,7 +183,7 @@ export default function AdminPortal() {
         if (!result?.user) throw new Error("The admin session service did not return a valid user.");
         setUser(result.user);
         try {
-          window.localStorage.setItem("hwh-admin-user", JSON.stringify(result.user));
+          saveAdminUser(result.user);
         } catch {
           // The verified in-memory session can continue if browser storage is blocked.
         }
@@ -250,7 +233,7 @@ export default function AdminPortal() {
 
   useEffect(() => {
     const isRootAdmin = user?.role === "admin" && !user?._id;
-    const canViewPage = page === "Profile"
+    const canViewPage = page === ADMIN_PAGE_IDS.PROFILE
       || isRootAdmin
       || !Array.isArray(user?.pageAccess)
       || user.pageAccess.includes(page);
@@ -268,7 +251,7 @@ export default function AdminPortal() {
     if (!activeToken) return;
     setLoading(true);
     try {
-      if (["Settings", "Profile"].includes(target)) {
+      if ([ADMIN_PAGE_IDS.SETTINGS, ADMIN_PAGE_IDS.PROFILE].includes(target)) {
         setLoading(false);
         return;
       }
@@ -288,7 +271,12 @@ export default function AdminPortal() {
         ...current,
         [target]: result.stats ? result : result.items || [],
       }));
-      if (["Products", "Categories", "Brands", "Low Stock"].includes(target)) {
+      if ([
+        ADMIN_PAGE_IDS.PRODUCTS,
+        ADMIN_PAGE_IDS.CATEGORIES,
+        ADMIN_PAGE_IDS.BRANDS,
+        ADMIN_PAGE_IDS.LOW_STOCK,
+      ].includes(target)) {
         const [brands, categories] = await Promise.all([
           adminRequest("/brands", { token: activeToken }),
           adminRequest("/categories", { token: activeToken }),
@@ -396,8 +384,7 @@ export default function AdminPortal() {
       }
       let sessionSaved = true;
       try {
-        window.localStorage.setItem("hwh-admin-session", result.token);
-        window.localStorage.setItem("hwh-admin-user", JSON.stringify(result.user));
+        saveAdminSession(result.token, result.user);
       } catch {
         sessionSaved = false;
         clearStoredAdminSession();
@@ -560,10 +547,10 @@ export default function AdminPortal() {
     let rows = Array.isArray(data[page]) ? data[page] : [];
     const needle = query.trim().toLowerCase();
     if (!needle) return rows;
-    if (page === "Categories" && needle === "hidden") {
+    if (page === ADMIN_PAGE_IDS.CATEGORIES && needle === "hidden") {
       return rows.filter((row) => row.isActive === false);
     }
-    if (page === "Categories" && needle === "active") {
+    if (page === ADMIN_PAGE_IDS.CATEGORIES && needle === "active") {
       return rows.filter((row) => row.isActive !== false);
     }
     return rows.filter((row) =>
@@ -608,7 +595,7 @@ export default function AdminPortal() {
   const dashboard = data.Dashboard || {};
   const stats = dashboard.stats || {};
   const titleCopy =
-    pageDescriptions[page] ||
+    ADMIN_PAGE_DESCRIPTIONS[page] ||
     `Manage ${page.toLowerCase()} for HealthwithHerbal.`;
   const logout = () => {
     clearStoredAdminSession();
@@ -622,7 +609,7 @@ export default function AdminPortal() {
     setUser(null);
     setSessionReady(true);
     setSessionCheckError("");
-    setPage("Dashboard");
+    setPage(ADMIN_PAGE_IDS.DASHBOARD);
     setQuery("");
     setProductCategoryScope(null);
     if (typeof window !== "undefined") {
@@ -737,7 +724,7 @@ export default function AdminPortal() {
         token={token}
         onUserUpdated={(updatedUser) => {
           setUser(updatedUser);
-          window.localStorage.setItem("hwh-admin-user", JSON.stringify(updatedUser));
+          saveAdminUser(updatedUser);
         }}
       />
     ),
@@ -753,11 +740,11 @@ export default function AdminPortal() {
         sidebarOpen={sidebar}
         setSidebarOpen={setSidebar}
         pendingOrders={stats.pendingOrders || 0}
-        pendingReturns={(data["Returns & Exchanges"] || []).filter((request) => request.status === "pending").length}
+        pendingReturns={(data[ADMIN_PAGE_IDS.RETURNS_EXCHANGES] || []).filter((request) => request.status === RETURN_EXCHANGE_STATUSES[0]).length}
         allowedPages={Array.isArray(user?.pageAccess)
           ? user.role === "admin" && !user?._id
             ? undefined
-            : [...new Set([...user.pageAccess, ...(user.role === "employee" ? ["Profile"] : [])])]
+            : [...new Set([...user.pageAccess, ...(user.role === "employee" ? [ADMIN_PAGE_IDS.PROFILE] : [])])]
           : undefined}
       />
       <main>
@@ -793,7 +780,7 @@ export default function AdminPortal() {
               <h1>{page}</h1>
               <p>{titleCopy}</p>
             </div>
-            {page === "Users" ? (
+            {page === ADMIN_PAGE_IDS.USERS ? (
               <button type="button" className="primary" onClick={() => setAddingUser(true)}>
                 <span aria-hidden="true">+</span> Add New User
               </button>
@@ -804,7 +791,7 @@ export default function AdminPortal() {
               </div>
             )}
           </div>
-          {page !== "Dashboard" && page !== "Low Stock" && page !== "Returns & Exchanges" && (
+          {page !== ADMIN_PAGE_IDS.DASHBOARD && page !== ADMIN_PAGE_IDS.LOW_STOCK && page !== ADMIN_PAGE_IDS.RETURNS_EXCHANGES && (
             <PageStats
               page={page}
               stats={stats}
@@ -835,7 +822,7 @@ export default function AdminPortal() {
         onClose={closeDeleteModal}
         onConfirm={confirmDelete}
         onNavigateToAssigned={(name) => {
-          setPage("Products");
+          setPage(ADMIN_PAGE_IDS.PRODUCTS);
           setQuery(name || "");
         }}
       />

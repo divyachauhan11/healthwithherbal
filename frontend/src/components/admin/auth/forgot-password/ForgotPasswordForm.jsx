@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Check, LoaderCircle, Mail } from "lucide-react";
+import { FormField } from "@/components/shared/FormField";
 import "./theme.css";
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
@@ -97,8 +98,12 @@ export default function ForgotPasswordForm({
             <p className="fp-subtitle">{subtitle}</p>
             {error && <div className="fp-error" role="alert">{error}</div>}
             <form onSubmit={submit} noValidate>
-              <label htmlFor="forgot-password-email" className="fp-label">Email address</label>
-              <div className="fp-email-field">
+              <FormField
+                variant="auth-email"
+                id="forgot-password-email"
+                label="Email address"
+                className="fp-email-field"
+              >
                 <Mail className="fp-email-icon" size={18} aria-hidden="true" />
                 <input
                   id="forgot-password-email"
@@ -112,7 +117,7 @@ export default function ForgotPasswordForm({
                   disabled={status === "loading"}
                   required
                 />
-              </div>
+              </FormField>
               <button type="submit" className="fp-button fp-button-full" disabled={status === "loading"}>
                 {status === "loading" ? <><LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> Sending…</> : submitButtonText}
               </button>

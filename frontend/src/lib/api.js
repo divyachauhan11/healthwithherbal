@@ -1,3 +1,4 @@
+import { getCustomerSessionToken } from "@/lib/session";
 import {
   apiDelete,
   apiGet,
@@ -176,7 +177,7 @@ export async function socialLogin(idToken) {
 function userAuthHeaders() {
   const token =
     typeof window !== "undefined"
-      ? localStorage.getItem("hwh_session_token")
+      ? getCustomerSessionToken()
       : "";
   return token ? { Authorization: `Bearer ${token}` } : {};
 }

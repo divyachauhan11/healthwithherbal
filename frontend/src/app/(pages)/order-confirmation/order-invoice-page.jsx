@@ -4,11 +4,11 @@ import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2, Printer } from "lucide-react";
 import { fetchOrderDetails } from "@/lib/api";
 import { DataTable } from "@/components/admin/tables";
+import { ORDER_STATUSES } from "@/constants/statuses";
+import { dateLabelLong } from "@/components/admin/global/admin-utils";
 
 const money = (value) => `₹${(Number(value) || 0).toFixed(2)}`;
-const date = (value) => value
-  ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "long", year: "numeric" })
-  : "—";
+const date = dateLabelLong;
 
 export function OrderInvoicePage({ order, navigate }) {
   const [loadedOrder, setLoadedOrder] = useState(null);
@@ -87,7 +87,7 @@ export function OrderInvoicePage({ order, navigate }) {
               <dt>Invoice date</dt><dd>{date(loadedOrder.updatedAt || loadedOrder.createdAt)}</dd>
               <dt>Order number</dt><dd>{loadedOrder.orderNumber || "—"}</dd>
               <dt>Order date</dt><dd>{date(loadedOrder.createdAt)}</dd>
-              <dt>Order status</dt><dd>{String(loadedOrder.status || "placed").toUpperCase()}</dd>
+              <dt>Order status</dt><dd>{String(loadedOrder.status || ORDER_STATUSES[0]).toUpperCase()}</dd>
               <dt>Payment method</dt><dd>{loadedOrder.paymentMethod === "cash_on_delivery" ? "Cash on Delivery" : loadedOrder.paymentMethod || "—"}</dd>
               {loadedOrder.trackingId && <><dt>Tracking ID</dt><dd>{loadedOrder.trackingId}</dd></>}
             </dl>

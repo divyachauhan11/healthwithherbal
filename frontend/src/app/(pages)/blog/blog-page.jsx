@@ -21,6 +21,7 @@ import {
   submitBlogComment,
 } from "@/lib/api";
 import { LOGO_URL } from "@/lib/store-data";
+import { dateLabelCompact } from "@/components/admin/global/admin-utils";
 
 function ArticleMarkdown({ content = "" }) {
   const inline = (text) => text.split(/(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]*\)|\[[^\]]+\]\{(?:size|color)=[^}]+\}|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|`[^`]+`)/g).map((part, index) => {
@@ -103,13 +104,7 @@ export function BlogPage({ openCatalog, blogs: blogsProp = [] }) {
       readTime: b.readTime || "5 min read",
       date:
         b.date ||
-        (b.publishedAt
-          ? new Date(b.publishedAt).toLocaleDateString("en-IN", {
-              day: "numeric",
-              month: "short",
-              year: "numeric",
-            })
-          : "Recent"),
+        (b.publishedAt ? dateLabelCompact(b.publishedAt, "Recent") : "Recent"),
       author: b.author || "Health With Herbal",
       image: b.coverImage || b.image || "",
       likesCount: Number(b.likesCount) || 0,

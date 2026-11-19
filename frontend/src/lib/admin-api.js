@@ -1,10 +1,10 @@
 import { apiRequest } from "@/lib/api-client";
+import { clearAdminSession, getAdminSessionToken } from "@/lib/session";
 
 function handleAdminUnauthorized(error) {
   if (error?.status !== 401 || typeof window === "undefined") return;
   try {
-    window.localStorage.removeItem("hwh-admin-session");
-    window.localStorage.removeItem("hwh-admin-user");
+    clearAdminSession();
   } catch {
     // The in-memory session is cleared by the admin portal event listener.
   }
@@ -41,7 +41,7 @@ export async function adminUploadRequest(files, { token } = {}) {
   let adminToken = token || "";
   if (!adminToken && typeof window !== "undefined") {
     try {
-      adminToken = window.localStorage.getItem("hwh-admin-session") || "";
+      adminToken = getAdminSessionToken() || "";
     } catch {
       // The request will return 401 and clear the in-memory portal session.
     }

@@ -3,7 +3,7 @@ export { Empty } from "./Empty";
 export { SearchField } from "./SearchField";
 export { PageStats } from "./PageStats";
 export { StatCard } from "./StatCard";
-export { currency, dateLabel, slugify, classStatus } from "./admin-utils";
+export { currency, currencyFixed, dateLabel, dateLabelCompact, dateLabelLong, dateTimeLabel, slugify, classStatus } from "./admin-utils";
 export { AdminHeader } from "./AdminHeader";
 export { AdminPageHeader } from "./AdminPageHeader";
 export { AdminSidebar } from "./AdminSidebar";

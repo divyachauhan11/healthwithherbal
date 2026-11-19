@@ -1,25 +1,34 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { ArrowLeft, Check, Clock3, Trash2, X, CircleX } from "lucide-react";
 import { adminRequest } from "@/lib/admin-api";
+import { BLOG_COMMENT_STATUSES } from "@/constants/statuses";
+import { STATUS_BADGE_MAPS } from "@/constants/status-badges";
+import { StatusBadge } from "@/components/shared/StatusBadge";
+import { useAsyncResource } from "@/hooks";
 
 export default function BlogCommentsPanel({ blog, token, onBack, onChanged }) {
-  const [items, setItems] = useState([]);
   const [busyId, setBusyId] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [filter, setFilter] = useState("all");
-
-  useEffect(() => {
-    let active = true;
-    setLoading(true);
-    adminRequest(`/blogs/${encodeURIComponent(blog._id)}/comments`, { token })
-      .then((result) => { if (active) setItems(result.items || []); })
-      .catch((requestError) => { if (active) setError(requestError.message || "Could not load comments."); })
-      .finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [blog._id, token]);
+  const loadComments = useCallback(
+    () => adminRequest(`/blogs/${encodeURIComponent(blog._id)}/comments`, { token })
+      .then((result) => result.items || []),
+    [blog._id, token],
+  );
+  const {
+    data: items,
+    setData: setItems,
+    loading,
+    error,
+    setError,
+  } = useAsyncResource({
+    load: loadComments,
+    deps: [blog._id, token],
+    enabled: true,
+    initialData: [],
+    errorMessage: (requestError) => requestError.message || "Could not load comments.",
+  });
 
   const changeStatus = async (comment, status) => {
     setBusyId(comment._id);
@@ -57,8 +66,8 @@ export default function BlogCommentsPanel({ blog, token, onBack, onChanged }) {
     }
   };
 
-  const pendingCount = items.filter((item) => item.status === "pending").length;
-  const approvedCount = items.filter((item) => item.status === "approved").length;
+  const pendingCount = items.filter((item) => item.status === BLOG_COMMENT_STATUSES[0]).length;
+  const approvedCount = items.filter((item) => item.status === BLOG_COMMENT_STATUSES[1]).length;
   const visibleItems = filter === "all" ? items : items.filter((item) => item.status === filter);
 
   return (
@@ -74,8 +83,8 @@ export default function BlogCommentsPanel({ blog, token, onBack, onChanged }) {
       {error && <p className="blog-comments-error" role="alert">{error}</p>}
       <div className="blog-comment-filters" role="group" aria-label="Filter comments">
         <button type="button" className={filter === "all" ? "active" : ""} onClick={() => setFilter("all")}>All <span>{items.length}</span></button>
-        <button type="button" className={filter === "pending" ? "active" : ""} onClick={() => setFilter("pending")}>Pending <span>{pendingCount}</span></button>
-        <button type="button" className={filter === "approved" ? "active" : ""} onClick={() => setFilter("approved")}>Approved <span>{approvedCount}</span></button>
+        <button type="button" className={filter === BLOG_COMMENT_STATUSES[0] ? "active" : ""} onClick={() => setFilter(BLOG_COMMENT_STATUSES[0])}>Pending <span>{pendingCount}</span></button>
+        <button type="button" className={filter === BLOG_COMMENT_STATUSES[1] ? "active" : ""} onClick={() => setFilter(BLOG_COMMENT_STATUSES[1])}>Approved <span>{approvedCount}</span></button>
       </div>
       {loading ? <p className="blog-comments-empty">Loading comments…</p> : visibleItems.length ? (
         <div className="blog-comments-list">
@@ -83,13 +92,17 @@ export default function BlogCommentsPanel({ blog, token, onBack, onChanged }) {
             <article className="blog-admin-comment" key={comment._id}>
               <div className="blog-admin-comment-top">
                 <div><strong>{comment.authorName}</strong><small>{comment.authorEmail || "No email provided"}</small></div>
-                <span className={`blog-comment-status ${comment.status}`}>{comment.status === "pending" ? "Pending approval" : comment.status}</span>
+                <StatusBadge
+                  status={comment.status}
+                  statusMap={STATUS_BADGE_MAPS.comment}
+                  className="blog-comment-status"
+                />
               </div>
               <p>{comment.content}</p>
               <div className="blog-admin-comment-footer">
                 <span><Clock3 size={13} /> {new Date(comment.createdAt).toLocaleDateString()}</span>
                 <div>
-                  {comment.status !== "approved" ? <button type="button" className="blog-comment-approve" disabled={busyId === comment._id} onClick={() => changeStatus(comment, "approved")}><Check size={14} /> Approve</button> : <button type="button" className="blog-comment-unapprove" disabled={busyId === comment._id} onClick={() => changeStatus(comment, "pending")}><CircleX size={14} /> Unapprove</button>}
+                  {comment.status !== BLOG_COMMENT_STATUSES[1] ? <button type="button" className="blog-comment-approve" disabled={busyId === comment._id} onClick={() => changeStatus(comment, BLOG_COMMENT_STATUSES[1])}><Check size={14} /> Approve</button> : <button type="button" className="blog-comment-unapprove" disabled={busyId === comment._id} onClick={() => changeStatus(comment, BLOG_COMMENT_STATUSES[0])}><CircleX size={14} /> Unapprove</button>}
                   <button type="button" className="blog-comment-delete" disabled={busyId === comment._id} onClick={() => deleteComment(comment)}><Trash2 size={14} /> Delete</button>
                   {busyId === comment._id && <small>Saving…</small>}
                 </div>

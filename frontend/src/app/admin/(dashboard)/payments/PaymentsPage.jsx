@@ -6,12 +6,15 @@ import { createPortal } from "react-dom";
 import { DashboardPanel } from "@/components/admin/dashboard";
 import { SearchField } from "@/components/admin/global";
 import { DataTable } from "@/components/admin/tables";
-import { currency, dateLabel } from "@/components/admin/global/admin-utils";
+import { currency, dateLabel, dateTimeLabel } from "@/components/admin/global/admin-utils";
 import { RowActionsMenu } from "@/components/admin/tables";
 import { adminRequest } from "@/lib/admin-api";
+import { PAYMENT_STATUSES } from "@/constants/statuses";
+import { STATUS_BADGE_MAPS } from "@/constants/status-badges";
+import { StatusBadge } from "@/components/shared/StatusBadge";
 
 const displayName = (customer) => [customer?.firstName, customer?.lastName].filter(Boolean).join(" ") || customer?.name || "Customer";
-const dateTime = (value) => value ? new Date(value).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : "—";
+const dateTime = dateTimeLabel;
 
 function PaymentDetails({ payment, onClose }) {
   if (!payment || typeof document === "undefined") return null;
@@ -37,7 +40,11 @@ function PaymentDetails({ payment, onClose }) {
         <div className="payment-detail-body">
           <div className="payment-detail-hero">
             <div><span>Payment amount</span><strong>{currency(payment.amount, payment.currency || "INR")}</strong></div>
-            <span className={`payment-status-chip ${payment.status || "pending"}`}>{payment.status || "pending"}</span>
+            <StatusBadge
+              status={payment.status || PAYMENT_STATUSES[0]}
+              statusMap={STATUS_BADGE_MAPS.payment}
+              className="payment-status-chip"
+            />
           </div>
           <div className="payment-detail-section-grid">
             <section className="payment-detail-section">
@@ -105,9 +112,9 @@ export default function PaymentsPage({ rows = [], query = "", setQuery, token, n
   const [updatingPaymentId, setUpdatingPaymentId] = useState(null);
   const counts = useMemo(() => ({
     all: rows.length,
-    pending: rows.filter((payment) => payment.status === "pending").length,
-    paid: rows.filter((payment) => payment.status === "paid").length,
-    refunded: rows.filter((payment) => payment.status === "refunded").length,
+    pending: rows.filter((payment) => payment.status === PAYMENT_STATUSES[0]).length,
+    paid: rows.filter((payment) => payment.status === PAYMENT_STATUSES[2]).length,
+    refunded: rows.filter((payment) => payment.status === PAYMENT_STATUSES[4]).length,
   }), [rows]);
   const filteredRows = rows.filter((payment) => statusFilter === "all" || payment.status === statusFilter);
   const updateStatus = async (payment, status) => {
@@ -124,7 +131,7 @@ export default function PaymentsPage({ rows = [], query = "", setQuery, token, n
           amount: Number(payment.amount) || 0,
           currency: payment.currency || "INR",
           status,
-          paidAt: status === "paid" ? payment.paidAt || new Date().toISOString() : payment.paidAt || null,
+          paidAt: status === PAYMENT_STATUSES[2] ? payment.paidAt || new Date().toISOString() : payment.paidAt || null,
         },
       });
       notify?.("Payment status updated.");
@@ -140,7 +147,7 @@ export default function PaymentsPage({ rows = [], query = "", setQuery, token, n
     { key: "orderNumber", label: "Order", sortable: true, render: (payment) => <><strong>#{payment.orderNumber || "—"}</strong><small>{payment.orderStatus || "Status unavailable"}</small></> },
     { key: "customer", label: "Customer", render: (payment) => <><strong>{displayName(payment.customer)}</strong><small>{payment.customer?.email || "—"}</small></> },
     { key: "method", label: "Method", render: (payment) => <><strong>{String(payment.method || "—").replaceAll("_", " ")}</strong><small>{payment.gateway || "—"}</small></> },
-    { key: "status", label: "Status", render: (payment) => <select className={`payment-status-select ${payment.status || "pending"}`} value={payment.status || "pending"} disabled={updatingPaymentId === payment._id} onChange={(event) => updateStatus(payment, event.target.value)} aria-label={`Update payment status for order ${payment.orderNumber}`}><option value="pending">Pending</option><option value="authorized">Authorized</option><option value="paid">Paid</option><option value="failed">Failed</option><option value="refunded">Refunded</option></select> },
+    { key: "status", label: "Status", render: (payment) => <select className={`payment-status-select ${payment.status || PAYMENT_STATUSES[0]}`} value={payment.status || PAYMENT_STATUSES[0]} disabled={updatingPaymentId === payment._id} onChange={(event) => updateStatus(payment, event.target.value)} aria-label={`Update payment status for order ${payment.orderNumber}`}><option value={PAYMENT_STATUSES[0]}>Pending</option><option value={PAYMENT_STATUSES[1]}>Authorized</option><option value={PAYMENT_STATUSES[2]}>Paid</option><option value={PAYMENT_STATUSES[3]}>Failed</option><option value={PAYMENT_STATUSES[4]}>Refunded</option></select> },
     { key: "amount", label: "Amount", sortable: true, render: (payment) => <strong>{currency(payment.amount, payment.currency || "INR")}</strong> },
     { key: "createdAt", label: "Date", sortable: true, render: (payment) => dateLabel(payment.createdAt) },
     { key: "actions", label: "Actions", render: (payment) => <RowActionsMenu extraActions={[{ label: "View", icon: Eye, onClick: () => setSelected(payment) }]} /> },
@@ -157,7 +164,7 @@ export default function PaymentsPage({ rows = [], query = "", setQuery, token, n
       <DashboardPanel title="Payments" description="Review payment methods, transaction references, and collection status." className="payments-panel">
         <div className="payments-toolbar">
           <div className="payments-filters" role="group" aria-label="Filter payments by status">
-            {[["all", "All", counts.all], ["paid", "Paid", counts.paid], ["pending", "Pending", counts.pending], ["failed", "Failed", rows.filter((payment) => payment.status === "failed").length], ["refunded", "Refunded", counts.refunded]].map(([value, label, count]) => (
+            {[["all", "All", counts.all], [PAYMENT_STATUSES[2], "Paid", counts.paid], [PAYMENT_STATUSES[0], "Pending", counts.pending], [PAYMENT_STATUSES[3], "Failed", rows.filter((payment) => payment.status === PAYMENT_STATUSES[3]).length], [PAYMENT_STATUSES[4], "Refunded", counts.refunded]].map(([value, label, count]) => (
               <button type="button" key={value} className={statusFilter === value ? "active" : ""} onClick={() => setStatusFilter(value)}>{label}<span>{count}</span></button>
             ))}
           </div>

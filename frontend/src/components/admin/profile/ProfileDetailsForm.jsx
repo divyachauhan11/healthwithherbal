@@ -1,4 +1,5 @@
 import { Mail, Phone, Save, Trash2, UserRound } from "lucide-react";
+import { FormField } from "@/components/shared/FormField";
 
 export function ProfileDetailsForm({
   profile,
@@ -44,8 +45,10 @@ export function ProfileDetailsForm({
         </p>
       )}
       <form onSubmit={onSubmit}>
-        <label className="admin-profile-field">
-          <span><UserRound size={15} /> Full name</span>
+        <FormField
+          className="admin-profile-field"
+          label={<><UserRound size={15} /> Full name</>}
+        >
           <input
             required
             minLength={2}
@@ -55,14 +58,18 @@ export function ProfileDetailsForm({
             placeholder="Your name"
             disabled={loading || saving}
           />
-        </label>
-        <label className="admin-profile-field">
-          <span><Mail size={15} /> Email address</span>
+        </FormField>
+        <FormField
+          className="admin-profile-field"
+          label={<><Mail size={15} /> Email address</>}
+          hint="Email is managed by your administrator account."
+        >
           <input type="email" value={profile.email || user?.email || ""} readOnly />
-          <small>Email is managed by your administrator account.</small>
-        </label>
-        <label className="admin-profile-field">
-          <span><Phone size={15} /> Phone number</span>
+        </FormField>
+        <FormField
+          className="admin-profile-field"
+          label={<><Phone size={15} /> Phone number</>}
+        >
           <input
             type="tel"
             maxLength={30}
@@ -71,7 +78,7 @@ export function ProfileDetailsForm({
             placeholder="Add a contact number"
             disabled={loading || saving}
           />
-        </label>
+        </FormField>
         <button
           className="primary admin-profile-save"
           type="submit"

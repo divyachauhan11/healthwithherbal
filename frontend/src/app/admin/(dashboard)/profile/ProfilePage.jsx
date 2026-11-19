@@ -1,23 +1,46 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { adminRequest, adminUploadRequest } from "@/lib/admin-api";
+import { useAsyncResource } from "@/hooks";
 import { ProfileAccountInfo } from "@/components/admin/profile/ProfileAccountInfo";
 import { ProfileDetailsForm } from "@/components/admin/profile/ProfileDetailsForm";
 import { ProfileHero } from "@/components/admin/profile/ProfileHero";
 
 export default function ProfilePage({ user, token, onUserUpdated }) {
-  const [profile, setProfile] = useState(user || {});
   const [name, setName] = useState(user?.name || "");
   const [phone, setPhone] = useState(user?.phone || "");
   const [avatarFile, setAvatarFile] = useState(null);
   const [avatarPreview, setAvatarPreview] = useState("");
   const [removeAvatar, setRemoveAvatar] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
   const fileInputRef = useRef(null);
+
+  const loadProfile = useCallback(
+    () => adminRequest("/profile", { token }).then(({ user: freshUser }) => freshUser),
+    [token],
+  );
+  const applyLoadedProfile = useCallback((freshUser) => {
+    if (!freshUser) return;
+    setName(freshUser.name || "");
+    setPhone(freshUser.phone || "");
+  }, []);
+  const {
+    data: profile,
+    setData: setProfile,
+    loading,
+    error,
+    setError,
+  } = useAsyncResource({
+    load: loadProfile,
+    deps: [token],
+    enabled: true,
+    initialData: user || {},
+    setUndefinedData: false,
+    errorMessage: (requestError) => requestError.message || "Could not load your profile.",
+    onSuccess: applyLoadedProfile,
+  });
 
   useEffect(() => {
     if (!avatarFile) {
@@ -28,26 +51,6 @@ export default function ProfilePage({ user, token, onUserUpdated }) {
     setAvatarPreview(previewUrl);
     return () => URL.revokeObjectURL(previewUrl);
   }, [avatarFile]);
-
-  useEffect(() => {
-    let active = true;
-    adminRequest("/profile", { token })
-      .then(({ user: freshUser }) => {
-        if (!active || !freshUser) return;
-        setProfile(freshUser);
-        setName(freshUser.name || "");
-        setPhone(freshUser.phone || "");
-      })
-      .catch((requestError) => {
-        if (active) setError(requestError.message || "Could not load your profile.");
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [token]);
 
   const saveProfile = async (event) => {
     event.preventDefault();

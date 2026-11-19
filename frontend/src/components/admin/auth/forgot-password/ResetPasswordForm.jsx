@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Check, Eye, EyeOff, KeyRound, LoaderCircle } from "lucide-react";
 import { apiPost } from "@/lib/api-client";
+import { FormField } from "@/components/shared/FormField";
 import "./theme.css";
 
 export default function ResetPasswordForm({ token = "", email = "" }) {
@@ -65,8 +66,12 @@ export default function ResetPasswordForm({ token = "", email = "" }) {
             <p className="fp-subtitle text-[var(--fp-text-muted)]">Choose a new password for your admin account.</p>
             {error && <div className="fp-error bg-[var(--fp-error-bg)] text-[var(--fp-error-text)]" role="alert">{error}</div>}
             <form onSubmit={submit}>
-              <div className="fp-reset-field">
-                <label htmlFor="reset-password" className="fp-label">New password</label>
+              <FormField
+                variant="auth-password"
+                id="reset-password"
+                label="New password"
+                className="fp-reset-field"
+              >
                 <div className="fp-password-wrap">
                   <KeyRound className="fp-password-icon" size={17} aria-hidden="true" />
                   <input
@@ -88,10 +93,14 @@ export default function ResetPasswordForm({ token = "", email = "" }) {
                 <div className={`fp-password-hint${password.length >= 8 ? " is-valid" : ""}`}>
                   <Check size={14} aria-hidden="true" /> Use at least 8 characters
                 </div>
-              </div>
+              </FormField>
 
-              <div className="fp-reset-field fp-reset-field-confirm">
-                <label htmlFor="confirm-reset-password" className="fp-label">Confirm new password</label>
+              <FormField
+                variant="auth-password"
+                id="confirm-reset-password"
+                label="Confirm new password"
+                className="fp-reset-field fp-reset-field-confirm"
+              >
                 <div className="fp-password-wrap">
                   <KeyRound className="fp-password-icon" size={17} aria-hidden="true" />
                   <input
@@ -115,7 +124,7 @@ export default function ResetPasswordForm({ token = "", email = "" }) {
                     <Check size={14} aria-hidden="true" /> {confirmPassword === password ? "Passwords match" : "Passwords do not match"}
                   </div>
                 )}
-              </div>
+              </FormField>
 
               <button type="submit" className="fp-button fp-button-full w-full bg-[var(--fp-primary)]" disabled={status === "loading"}>
                 {status === "loading" ? <><LoaderCircle size={18} className="animate-spin" aria-hidden="true" /> Updating…</> : "Reset password"}
