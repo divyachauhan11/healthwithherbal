@@ -1,5 +1,5 @@
-import { SearchField } from "../../../../components/admin/global";
-import { OrderTable } from "../../../../components/admin/custom";
+import { SearchField } from "@/components/admin/global";
+import { OrderTable } from "@/components/admin/tables";
 export default function OrdersPage({ rows, query, setQuery, onRefresh }) {
   return (
     <section className="panel page-panel">

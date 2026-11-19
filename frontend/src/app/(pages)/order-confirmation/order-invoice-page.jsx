@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2, Printer } from "lucide-react";
-import { fetchOrderDetails } from "../../../lib/api";
+import { fetchOrderDetails } from "@/lib/api";
+import { DataTable } from "@/components/admin/tables";
 
 const money = (value) => `₹${(Number(value) || 0).toFixed(2)}`;
 const date = (value) => value
@@ -96,20 +97,28 @@ export function OrderInvoicePage({ order, navigate }) {
         <section className="invoice-items-section">
           <h2>Order summary</h2>
           <div className="invoice-table-wrap">
-            <table className="invoice-table">
-              <thead><tr><th>Item</th><th>SKU</th><th className="numeric">Qty.</th><th className="numeric">Unit price</th><th className="numeric">Line total</th></tr></thead>
-              <tbody>
-                {(loadedOrder.items || []).map((item, index) => (
-                  <tr key={`${item.legacyId || item.product || item.title}-${index}`}>
-                    <td><strong>{item.titleSnapshot || item.title || "Product"}</strong>{(item.brandSnapshot || item.brand) && <small>{item.brandSnapshot || item.brand}</small>}</td>
-                    <td>{item.skuSnapshot || item.sku || "—"}</td>
-                    <td className="numeric">{item.quantity}</td>
-                    <td className="numeric">{money(item.unitPrice)}</td>
-                    <td className="numeric">{money(item.lineTotal ?? Number(item.unitPrice) * Number(item.quantity))}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              data={loadedOrder.items || []}
+              rowKey={(item, index) => `${item.legacyId || item.product || item.title}-${index}`}
+              pagination={false}
+              tableClassName="invoice-table"
+              columns={[
+                {
+                  key: "item",
+                  label: "Item",
+                  render: (item) => (
+                    <>
+                      <strong>{item.titleSnapshot || item.title || "Product"}</strong>
+                      {(item.brandSnapshot || item.brand) && <small>{item.brandSnapshot || item.brand}</small>}
+                    </>
+                  ),
+                },
+                { key: "skuSnapshot", label: "SKU", render: (item) => item.skuSnapshot || item.sku || "—" },
+                { key: "quantity", label: "Qty.", className: "numeric", cellClassName: "numeric" },
+                { key: "unitPrice", label: "Unit price", className: "numeric", cellClassName: "numeric", render: (item) => money(item.unitPrice) },
+                { key: "lineTotal", label: "Line total", className: "numeric", cellClassName: "numeric", render: (item) => money(item.lineTotal ?? Number(item.unitPrice) * Number(item.quantity)) },
+              ]}
+            />
           </div>
 
           <div className="invoice-bottom-grid">

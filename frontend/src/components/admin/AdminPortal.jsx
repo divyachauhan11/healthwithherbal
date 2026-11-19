@@ -10,12 +10,15 @@ import {
   AdminHeader,
   DeleteConfirmationModal,
 } from "./global";
+import { ConfirmModal } from "../pages/modals/ConfirmModal";
 import {
   DashboardPage,
   ProductsPage,
   CategoriesPage,
   BrandsPage,
   OrdersPage,
+  PaymentsPage,
+  ReturnsPage,
   CouponsPage,
   ReviewsPage,
   CustomersPage,
@@ -33,6 +36,8 @@ const VALID_PAGES = [
   "Categories",
   "Brands",
   "Orders",
+  "Payments",
+  "Returns & Exchanges",
   "Coupons",
   "Reviews",
   "Customers",
@@ -42,14 +47,43 @@ const VALID_PAGES = [
   "Profile",
 ];
 
+const normalizePageKey = (value) => String(value || "")
+  .toLowerCase()
+  .replace(/\s*&\s*/g, "-and-")
+  .replace(/\s+/g, "-")
+  .replace(/-+/g, "-");
+
 const getValidPageName = (candidate) => {
   if (!candidate || typeof candidate !== "string") return null;
   const match = VALID_PAGES.find(
-    (p) =>
-      p.toLowerCase() === candidate.toLowerCase() ||
-      p.toLowerCase().replace(/\s+/g, "-") === candidate.toLowerCase().replace(/\s+/g, "-"),
+    (p) => normalizePageKey(p) === normalizePageKey(candidate),
   );
   return match || null;
+};
+
+const getLoginErrorMessage = (error) => {
+  if (error?.status === 401) return error.message || "Email or password is incorrect, or this account is disabled.";
+  if (error?.status === 429) return "Too many sign-in attempts. Wait a few minutes, then try again.";
+  if (error?.status === 503) return error.message || "Admin sign-in is temporarily unavailable. Check the server configuration.";
+  if (error?.status >= 500) {
+    return error.message && error.message !== "An unexpected server error occurred."
+      ? error.message
+      : "The sign-in service had a problem. Please try again in a moment.";
+  }
+  if (error?.code === "INVALID_JSON") return "The sign-in service returned an unexpected response. Please try again or contact your administrator.";
+  if (error instanceof TypeError || /fetch failed|failed to fetch|network|load failed|connection/i.test(error?.message || "")) {
+    return "Could not reach the sign-in service. Check your connection and try again.";
+  }
+  return error?.message || "Could not sign in. Please check your details and try again.";
+};
+
+const clearStoredAdminSession = () => {
+  try {
+    window.localStorage.removeItem("hwh-admin-session");
+    window.localStorage.removeItem("hwh-admin-user");
+  } catch {
+    // Storage can be unavailable in private or restricted browser contexts.
+  }
 };
 
 const pageDescriptions = {
@@ -58,12 +92,16 @@ const pageDescriptions = {
   "Low Stock":
     "Monitor, restock, and manage products with inventory below 10 units.",
   Orders: "Track, fulfil and manage customer orders.",
+  Payments: "Review payment collection, transactions and refunds.",
+  "Returns & Exchanges": "Review and resolve customer return and exchange requests.",
   Customers: "Understand customer activity and purchase history.",
 };
 
 export default function AdminPortal() {
   const [token, setToken] = useState("");
   const [user, setUser] = useState(null);
+  const [sessionReady, setSessionReady] = useState(false);
+  const [sessionCheckError, setSessionCheckError] = useState("");
   const [page, setPage] = useState(() => {
     if (typeof window === "undefined") return "Dashboard";
     try {
@@ -103,6 +141,9 @@ export default function AdminPortal() {
   const [form, setForm] = useState(null);
   const [loginError, setLoginError] = useState("");
   const [toast, setToast] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
   const [addingUser, setAddingUser] = useState(false);
   const [deleteModal, setDeleteModal] = useState({
     isOpen: false,
@@ -112,39 +153,66 @@ export default function AdminPortal() {
     blockedCount: 0,
     busy: false,
   });
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   useEffect(() => {
-    const saved = window.localStorage.getItem("hwh-admin-session");
-    if (saved) {
-      setToken(saved);
-      try {
+    try {
+      const saved = window.localStorage.getItem("hwh-admin-session");
+      if (saved) {
+        setToken(saved);
         setUser(
           JSON.parse(window.localStorage.getItem("hwh-admin-user") || "null"),
         );
-      } catch {
-        setUser(null);
+      } else {
+        setSessionReady(true);
       }
+    } catch {
+      clearStoredAdminSession();
+      setToken("");
+      setUser(null);
+      setSessionReady(true);
     }
   }, []);
 
   useEffect(() => {
-    if (!token) return;
+    const handleInvalidSession = (event) => {
+      clearStoredAdminSession();
+      setToken("");
+      setUser(null);
+      setSessionReady(true);
+      setSessionCheckError("");
+      setLoginError(event.detail?.message || "Your admin session is no longer valid. Please sign in again.");
+    };
+    window.addEventListener("hwh-admin-session-invalid", handleInvalidSession);
+    return () => window.removeEventListener("hwh-admin-session-invalid", handleInvalidSession);
+  }, []);
+
+  useEffect(() => {
+    if (!token) {
+      return undefined;
+    }
     let active = true;
+    let hasValidatedSession = false;
     const refreshStaffAccess = async () => {
       try {
         const result = await adminRequest("/auth/session", { token });
-        if (!active || !result.user) return;
+        if (!active) return;
+        if (!result?.user) throw new Error("The admin session service did not return a valid user.");
         setUser(result.user);
-        window.localStorage.setItem("hwh-admin-user", JSON.stringify(result.user));
+        try {
+          window.localStorage.setItem("hwh-admin-user", JSON.stringify(result.user));
+        } catch {
+          // The verified in-memory session can continue if browser storage is blocked.
+        }
+        hasValidatedSession = true;
+        setSessionCheckError("");
       } catch (error) {
         if (!active) return;
-        if (/no longer active|session has expired|session is invalid/i.test(error.message)) {
-          window.localStorage.removeItem("hwh-admin-session");
-          window.localStorage.removeItem("hwh-admin-user");
-          setToken("");
-          setUser(null);
-          setLoginError(error.message);
+        if (error.status !== 401 && !hasValidatedSession) {
+          setSessionCheckError(error.message || "Could not reach the admin session service.");
         }
+      } finally {
+        if (active) setSessionReady(true);
       }
     };
     refreshStaffAccess();
@@ -156,7 +224,34 @@ export default function AdminPortal() {
   }, [token]);
 
   useEffect(() => {
+    if (!token) {
+      setNotifications([]);
+      return undefined;
+    }
+    let active = true;
+    const refresh = async () => {
+      if (active) setNotificationsLoading(true);
+      try {
+        const result = await adminRequest("/notifications", { token });
+        if (active) setNotifications(Array.isArray(result.items) ? result.items : []);
+      } catch (error) {
+        if (active) console.warn("Could not load admin notifications:", error.message);
+      } finally {
+        if (active) setNotificationsLoading(false);
+      }
+    };
+    refresh();
+    const intervalId = window.setInterval(refresh, 60000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [token]);
+
+  useEffect(() => {
+    const isRootAdmin = user?.role === "admin" && !user?._id;
     const canViewPage = page === "Profile"
+      || isRootAdmin
       || !Array.isArray(user?.pageAccess)
       || user.pageAccess.includes(page);
     if (!canViewPage) {
@@ -182,6 +277,8 @@ export default function AdminPortal() {
           ? "/dashboard"
           : target === "Low Stock"
             ? "/low-stock"
+            : target === "Returns & Exchanges"
+              ? "/return-exchange"
             : `/${target.toLowerCase()}`;
       if (target === "Products" && productCategoryScope?.id) {
         route += `?parentCategoryId=${encodeURIComponent(productCategoryScope.id)}`;
@@ -213,15 +310,16 @@ export default function AdminPortal() {
       }
     } catch (error) {
       if (
-        error.message.toLowerCase().includes("session") ||
-        error.message.toLowerCase().includes("sign in")
+        error.status === 401 ||
+        String(error.message || "").toLowerCase().includes("session") ||
+        String(error.message || "").toLowerCase().includes("sign in")
       ) {
-        window.localStorage.removeItem("hwh-admin-session");
-        window.localStorage.removeItem("hwh-admin-user");
+        clearStoredAdminSession();
         setToken("");
         setUser(null);
+        setLoginError(error.message || "Your admin session expired. Sign in again to continue.");
       }
-      notify(error.message, "error");
+      notify(error.message || "Could not load this admin page. Please try again.", "error");
     } finally {
       setLoading(false);
     }
@@ -243,7 +341,7 @@ export default function AdminPortal() {
       }
 
       const params = new URLSearchParams(window.location.search);
-      const slugPage = page.toLowerCase().replace(/\s+/g, "-");
+      const slugPage = normalizePageKey(page);
       params.set("page", slugPage);
       if (query.trim()) {
         params.set("q", query.trim());
@@ -281,29 +379,42 @@ export default function AdminPortal() {
 
   const onLogin = async (event) => {
     event.preventDefault();
+    if (busy) return;
     setBusy(true);
     setLoginError("");
-    const formData = new FormData(event.currentTarget);
     try {
+      const formData = new FormData(event.currentTarget);
       const result = await adminRequest("/auth/login", {
         method: "POST",
         body: {
-          email: formData.get("email"),
+          email: String(formData.get("email") || "").trim().toLowerCase(),
           password: formData.get("password"),
         },
       });
-      window.localStorage.setItem("hwh-admin-session", result.token);
-      window.localStorage.setItem(
-        "hwh-admin-user",
-        JSON.stringify(result.user),
-      );
+      if (!result?.token || !result?.user || !result.user.role) {
+        throw new Error("The sign-in service did not return a valid admin session. Please try again.");
+      }
+      let sessionSaved = true;
+      try {
+        window.localStorage.setItem("hwh-admin-session", result.token);
+        window.localStorage.setItem("hwh-admin-user", JSON.stringify(result.user));
+      } catch {
+        sessionSaved = false;
+        clearStoredAdminSession();
+      }
       setUser(result.user);
       setToken(result.token);
+      setSessionReady(true);
+      setSessionCheckError("");
+      if (!sessionSaved) {
+        notify("Signed in, but this browser could not save the session. You may need to sign in again after refreshing.", "error");
+      }
       if (result.user.role === "employee") {
         setPage(result.user.pageAccess?.[0] || "Products");
       }
     } catch (error) {
-      setLoginError(error.message);
+      console.error("Admin sign-in failed:", error);
+      setLoginError(getLoginErrorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -460,6 +571,38 @@ export default function AdminPortal() {
     );
   }, [data, page, query]);
 
+  if (!sessionReady) {
+    return <main className="admin-login-wrap" aria-busy="true" />;
+  }
+
+  if (sessionCheckError && token) {
+    return (
+      <main className="admin-login-wrap">
+        <section className="admin-login" role="alert">
+          <span className="eyebrow">ADMIN PORTAL</span>
+          <h1>Could not verify your session</h1>
+          <p>{sessionCheckError}</p>
+          <button className="primary" type="button" onClick={() => window.location.reload()}>
+            Try again
+          </button>
+          <button
+            className="admin-session-signout"
+            type="button"
+            onClick={() => {
+              clearStoredAdminSession();
+              setToken("");
+              setUser(null);
+              setSessionCheckError("");
+              setLoginError("");
+            }}
+          >
+            Return to sign in
+          </button>
+        </section>
+      </main>
+    );
+  }
+
   if (!token) return <Login onLogin={onLogin} busy={busy} error={loginError} />;
 
   const dashboard = data.Dashboard || {};
@@ -468,12 +611,17 @@ export default function AdminPortal() {
     pageDescriptions[page] ||
     `Manage ${page.toLowerCase()} for HealthwithHerbal.`;
   const logout = () => {
-    window.localStorage.removeItem("hwh-admin-session");
-    window.localStorage.removeItem("hwh-admin-user");
-    window.localStorage.removeItem("hwh-admin-page");
-    window.localStorage.removeItem("hwh-admin-query");
+    clearStoredAdminSession();
+    try {
+      window.localStorage.removeItem("hwh-admin-page");
+      window.localStorage.removeItem("hwh-admin-query");
+    } catch {
+      // The local session is also cleared from memory below.
+    }
     setToken("");
     setUser(null);
+    setSessionReady(true);
+    setSessionCheckError("");
     setPage("Dashboard");
     setQuery("");
     setProductCategoryScope(null);
@@ -541,6 +689,15 @@ export default function AdminPortal() {
     Orders: (
       <OrdersPage {...sharedPageProps} onRefresh={() => load("Orders")} />
     ),
+    Payments: <PaymentsPage {...sharedPageProps} token={token} notify={notify} onRefresh={() => load("Payments")} />,
+    "Returns & Exchanges": (
+      <ReturnsPage
+        {...sharedPageProps}
+        token={token}
+        notify={notify}
+        onRefresh={() => load("Returns & Exchanges")}
+      />
+    ),
     Coupons: <CouponsPage {...sharedPageProps} />,
     Reviews: (
       <ReviewsPage
@@ -550,11 +707,21 @@ export default function AdminPortal() {
         notify={notify}
       />
     ),
-    Customers: <CustomersPage {...sharedPageProps} />,
-    Blogs: <BlogsPage {...sharedPageProps} />,
+    Customers: (
+      <CustomersPage
+        {...sharedPageProps}
+        token={token}
+        onRefresh={() => {
+          load("Customers");
+          load("Dashboard");
+        }}
+      />
+    ),
+    Blogs: <BlogsPage {...sharedPageProps} token={token} onRefresh={() => load("Blogs")} />,
     Users: (
       <UsersPage
         {...sharedPageProps}
+        currentUser={user}
         onCreateUser={createStaffUser}
         onUpdateUser={updateStaffUser}
         onDeleteUser={(item) => remove("users", item)}
@@ -586,8 +753,11 @@ export default function AdminPortal() {
         sidebarOpen={sidebar}
         setSidebarOpen={setSidebar}
         pendingOrders={stats.pendingOrders || 0}
+        pendingReturns={(data["Returns & Exchanges"] || []).filter((request) => request.status === "pending").length}
         allowedPages={Array.isArray(user?.pageAccess)
-          ? [...new Set([...user.pageAccess, ...(user.role === "employee" ? ["Profile"] : [])])]
+          ? user.role === "admin" && !user?._id
+            ? undefined
+            : [...new Set([...user.pageAccess, ...(user.role === "employee" ? ["Profile"] : [])])]
           : undefined}
       />
       <main>
@@ -596,7 +766,25 @@ export default function AdminPortal() {
           setQuery={setQuery}
           user={user}
           onOpenMenu={() => setSidebar(true)}
-          onLogout={logout}
+          onLogout={() => setShowLogoutConfirm(true)}
+          notifications={notifications}
+          notificationsOpen={notificationsOpen}
+          notificationsLoading={notificationsLoading}
+          onToggleNotifications={setNotificationsOpen}
+          onRefreshNotifications={() => {
+            if (!token) return;
+            setNotificationsLoading(true);
+            adminRequest("/notifications", { token })
+              .then((result) => setNotifications(Array.isArray(result.items) ? result.items : []))
+              .catch((error) => console.warn("Could not refresh admin notifications:", error.message))
+              .finally(() => setNotificationsLoading(false));
+          }}
+          onSelectNotification={(notification) => {
+            setPage(notification.page || "Dashboard");
+            setQuery(notification.query || "");
+            setNotificationsOpen(false);
+            setSidebar(false);
+          }}
         />
         <div className="content">
           <div className="title-row">
@@ -616,7 +804,7 @@ export default function AdminPortal() {
               </div>
             )}
           </div>
-          {page !== "Dashboard" && (
+          {page !== "Dashboard" && page !== "Low Stock" && page !== "Returns & Exchanges" && (
             <PageStats
               page={page}
               stats={stats}
@@ -650,6 +838,20 @@ export default function AdminPortal() {
           setPage("Products");
           setQuery(name || "");
         }}
+      />
+
+      {/* Admin Logout Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          setShowLogoutConfirm(false);
+          logout();
+        }}
+        title="Log Out of Admin Portal?"
+        message="Are you sure you want to end your administrative session?"
+        confirmLabel="Log Out"
+        variant="warning"
       />
 
       {toast && (

@@ -1,18 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { SearchField, Modal } from "../../../../components/admin/global";
-import { UserTable } from "../../../../components/admin/custom";
+import { SearchField, Modal } from "@/components/admin/global";
+import { UserTable } from "@/components/admin/tables";
 
 const employeePages = [
-  "Products", "Categories", "Brands", "Coupons", "Reviews", "Orders", "Customers", "Blogs", "Profile",
+  "Products", "Categories", "Brands", "Coupons", "Reviews", "Orders", "Payments", "Returns & Exchanges", "Customers", "Blogs", "Profile",
 ];
 const allAdminPages = [
-  "Dashboard", "Products", "Low Stock", "Categories", "Brands", "Orders",
+  "Dashboard", "Products", "Low Stock", "Categories", "Brands", "Orders", "Payments", "Returns & Exchanges",
   "Coupons", "Reviews", "Customers", "Blogs", "Users", "Settings", "Profile",
 ];
 
-export default function UsersPage({ rows = [], query, setQuery, onCreateUser, onUpdateUser, onDeleteUser, busy = false, isOpen = false, onOpen, onClose }) {
+export default function UsersPage({ rows = [], query, setQuery, onCreateUser, onUpdateUser, onDeleteUser, currentUser, busy = false, isOpen = false, onOpen, onClose }) {
   const [editingUser, setEditingUser] = useState(null);
   const [form, setForm] = useState({
     name: "",
@@ -79,7 +79,13 @@ export default function UsersPage({ rows = [], query, setQuery, onCreateUser, on
           <SearchField value={query} onChange={setQuery} placeholder="Search users" />
           <p className="section-intro">Administrator and employee accounts with portal access.</p>
         </div>
-        <UserTable rows={rows} onEdit={editUser} onDelete={onDeleteUser} />
+        <UserTable
+          rows={rows}
+          onEdit={editUser}
+          onDelete={onDeleteUser}
+          currentUserId={currentUser?._id || currentUser?.id}
+          currentUserEmail={currentUser?.email}
+        />
       </section>
 
       <Modal

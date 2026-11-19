@@ -39,6 +39,27 @@ function registerAdminSettingsRoutes({
   Category,
 }) {
   router.get(
+    "/settings/return-exchange",
+    asyncHandler(async (_req, res) => {
+      const setting = await StoreSetting.findOne({ key: "returnExchangeEnabled" }).lean();
+      res.json({ enabled: setting?.value !== false });
+    }),
+  );
+
+  router.put(
+    "/settings/return-exchange",
+    asyncHandler(async (req, res) => {
+      if (typeof req.body?.enabled !== "boolean") return res.status(400).json({ error: "Choose whether return and exchange requests are enabled." });
+      const setting = await StoreSetting.findOneAndUpdate(
+        { key: "returnExchangeEnabled" },
+        { $set: { value: req.body.enabled } },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      ).lean();
+      res.json({ enabled: setting.value });
+    }),
+  );
+
+  router.get(
     "/settings/featured-categories",
     asyncHandler(async (_req, res) => {
       const parents = await Category.find({ isActive: true, isParent: true }).sort({ name: 1 }).select("_id name slug description").lean();
@@ -128,18 +149,31 @@ function registerAdminSettingsRoutes({
       }
 
       const folder = process.env.CLOUDINARY_FOLDER || "healthwithherbal";
+      const usedNames = new Map();
 
       const uploadPromises = files.map((file) => {
-        const ext = path.extname(file.originalname || "").toLowerCase();
-        const safeBase = path
-          .basename(file.originalname || "image", ext)
+        const ext = path.extname(file.originalname || "");
+        const rawBase = path.basename(file.originalname || "image", ext).trim();
+        const safeBase = rawBase
+          .replace(/\s+/g, "-")
           .replace(/[^a-zA-Z0-9_-]/g, "_")
-          .slice(0, 30);
-        const publicId = `${Date.now()}-${crypto.randomBytes(4).toString("hex")}-${safeBase}`;
+          .replace(/[-_]+/g, (m) => m[0])
+          .replace(/^[-_]+|[-_]+$/g, "") || "image";
+
+        let publicId = safeBase;
+        const count = usedNames.get(safeBase) || 0;
+        if (count > 0) {
+          publicId = `${safeBase}-${count + 1}`;
+        }
+        usedNames.set(safeBase, count + 1);
 
         return uploadBufferToCloudinary(file.buffer, {
           public_id: publicId,
           folder,
+          use_filename: true,
+          unique_filename: false,
+          overwrite: true,
+          filename_override: file.originalname,
         });
       });
 

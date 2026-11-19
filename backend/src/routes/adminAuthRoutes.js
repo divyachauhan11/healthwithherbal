@@ -5,6 +5,8 @@ const {
   safeEqual,
 } = require("../middleware/adminAuth");
 const { requirePageAccess } = require("../middleware/adminPageAccess");
+const createForgotPasswordController = require("../controllers/forgotPasswordController");
+const createResetPasswordController = require("../controllers/resetPasswordController");
 
 function registerAdminAuthRoutes({
   router,
@@ -14,6 +16,15 @@ function registerAdminAuthRoutes({
   invalid,
   User,
 }) {
+  router.post(
+    "/auth/forgot-password",
+    asyncHandler(createForgotPasswordController({ User })),
+  );
+  router.post(
+    "/auth/reset-password",
+    asyncHandler(createResetPasswordController({ User })),
+  );
+
   router.post(
     "/auth/login",
     asyncHandler(async (req, res) => {
@@ -37,62 +48,86 @@ function registerAdminAuthRoutes({
           safeEqual(parsed.data.password, password),
       );
       if (isConfiguredAdmin) {
-        await User.updateOne(
-          { email: email.toLowerCase() },
-          {
-            $setOnInsert: {
-              name: "Store administrator",
-              email: email.toLowerCase(),
-              role: "admin",
-              isActive: true,
-              passwordHash: crypto.randomBytes(32).toString("hex"),
-            },
-          },
-          { upsert: true },
-        );
-        const rootProfile = await User.findOne({ email: email.toLowerCase() }).select("avatarUrl").lean();
+        const rootAdmin = await User.findOne({
+          email: email.toLowerCase(),
+          role: "admin",
+        }).select("+passwordHash name email avatarUrl role isActive pageAccess authVersion");
+        if (!rootAdmin || !rootAdmin.isActive) {
+          return res.status(401).json({
+            error: "The configured admin account is missing or disabled. Ask another administrator to restore access.",
+          });
+        }
 
-        return res.json({
-          token: createAdminToken(email.toLowerCase(), secret, {
-            role: "admin",
-            name: "Store administrator",
-            pageAccess: adminPortalPages,
-          }),
-          user: {
-            name: "Store administrator",
-            email: email.toLowerCase(),
-            avatarUrl: rootProfile?.avatarUrl || "",
-            role: "admin",
-            pageAccess: adminPortalPages,
-          },
-        });
+        const [rootScheme, rootSalt, rootHash] = (rootAdmin.passwordHash || "").split("$");
+        const hasDatabasePassword = rootScheme === "scrypt" && rootSalt && /^[a-f0-9]{128}$/i.test(rootHash || "");
+        if (!hasDatabasePassword) {
+          const currentRootPageAccess = rootAdmin.pageAccess || [];
+          const rootPageAccess = adminPortalPages;
+          if (
+            currentRootPageAccess.length !== rootPageAccess.length ||
+            rootPageAccess.some((page) => !currentRootPageAccess.includes(page))
+          ) {
+            rootAdmin.pageAccess = rootPageAccess;
+            rootAdmin.authVersion = (Number(rootAdmin.authVersion) || 0) + 1;
+            await rootAdmin.save();
+          }
+
+          return res.json({
+            token: createAdminToken(email.toLowerCase(), secret, {
+              role: rootAdmin.role,
+              name: rootAdmin.name,
+              pageAccess: rootPageAccess,
+              userId: String(rootAdmin._id),
+              authVersion: Number(rootAdmin.authVersion) || 0,
+            }),
+            user: {
+              _id: rootAdmin._id,
+              name: rootAdmin.name,
+              email: rootAdmin.email,
+              avatarUrl: rootAdmin.avatarUrl || "",
+              role: rootAdmin.role,
+              pageAccess: rootPageAccess,
+            },
+          });
+        }
       }
 
       const staff = await User.findOne({
         email: parsed.data.email.toLowerCase(),
         role: { $in: ["admin", "employee"] },
       }).select("+passwordHash");
-      const [scheme, salt, expectedHash] = (staff?.passwordHash || "").split("$");
-      let passwordMatches = false;
-
-      if (staff?.isActive && scheme === "scrypt" && salt && expectedHash) {
-        const actualHash = crypto.scryptSync(parsed.data.password, salt, 64);
-        const expected = Buffer.from(expectedHash, "hex");
-        passwordMatches =
-          expected.length === actualHash.length &&
-          crypto.timingSafeEqual(expected, actualHash);
+      if (!staff) {
+        return res.status(401).json({
+          error: "No admin or employee account is registered with this email address.",
+        });
+      }
+      if (!staff.isActive) {
+        return res.status(401).json({ error: "This admin account is disabled." });
       }
 
-      if (!passwordMatches) {
-        return res.status(401).json({
-          error: "Email or password is incorrect, or this account is disabled.",
+      const [scheme, salt, expectedHash] = (staff?.passwordHash || "").split("$");
+      if (scheme !== "scrypt" || !salt || !/^[a-f0-9]{128}$/i.test(expectedHash || "")) {
+        return res.status(500).json({
+          error: "Password credentials for this account are not configured correctly. Ask an administrator to reset the account password.",
         });
+      }
+      let passwordMatches = false;
+
+      const actualHash = crypto.scryptSync(parsed.data.password, salt, 64);
+      const expected = Buffer.from(expectedHash, "hex");
+      passwordMatches =
+        expected.length === actualHash.length &&
+        crypto.timingSafeEqual(expected, actualHash);
+
+      if (!passwordMatches) {
+        return res.status(401).json({ error: "The password is incorrect." });
       }
 
       const claims = {
         role: staff.role,
         pageAccess: staff.pageAccess || [],
         userId: String(staff._id),
+        authVersion: Number(staff.authVersion) || 0,
         name: staff.name,
       };
       res.json({
@@ -113,22 +148,8 @@ function registerAdminAuthRoutes({
     "/auth/session",
     requireAdmin,
     asyncHandler(async (req, res) => {
-      if (!req.admin.userId) {
-        const pageAccess = req.admin.pageAccess || adminPortalPages;
-        const rootProfile = await User.findOne({ email: req.admin.email.toLowerCase() }).select("avatarUrl").lean();
-        return res.json({
-          user: {
-            name: "Store administrator",
-            email: req.admin.email,
-            avatarUrl: rootProfile?.avatarUrl || "",
-            role: "admin",
-            pageAccess,
-          },
-        });
-      }
-
       const staff = await User.findById(req.admin.userId)
-        .select("name email avatarUrl role isActive pageAccess")
+        .select("name email avatarUrl role isActive pageAccess authVersion")
         .lean();
       if (!staff || !staff.isActive || !["admin", "employee"].includes(staff.role)) {
         return res.status(401).json({

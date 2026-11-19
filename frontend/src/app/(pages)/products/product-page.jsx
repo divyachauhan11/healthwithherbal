@@ -11,12 +11,13 @@ import {
   Star,
   Sparkles,
 } from "lucide-react";
+import { listReviews } from "@/lib/api";
 import {
   AppButton,
   Rating,
   SectionHeading,
   ProductCard,
-} from "../../../components/global/primitives";
+} from "@/components/pages/shared/primitives";
 export function ProductPage({
   product,
   onAdd,
@@ -31,6 +32,20 @@ export function ProductPage({
 }) {
   const [quantity, setQuantity] = useState(1);
   const activeProducts = products;
+  const stockLimit = Number(product?.stockQty);
+  const hasStockLimit = product?.stockQty != null && Number.isFinite(stockLimit);
+  const alreadyInCart = (cart || []).filter((id) =>
+    [product?.id, product?._id, product?.legacyId].some((productId) =>
+      productId != null && String(productId) === String(id),
+    ),
+  ).length;
+  const maxAddQuantity = hasStockLimit
+    ? Math.max(0, stockLimit - alreadyInCart)
+    : Number.MAX_SAFE_INTEGER;
+
+  useEffect(() => {
+    setQuantity((current) => Math.min(Math.max(1, current), Math.max(1, maxAddQuantity)));
+  }, [product?.id, product?._id, maxAddQuantity]);
 
   const galleryImages = useMemo(() => {
     if (Array.isArray(product?.images) && product.images.length > 0) {
@@ -71,18 +86,13 @@ export function ProductPage({
     if (!product) return;
     let active = true;
     const prodId = product._id || product.id;
-    const apiUrl = (
-      process.env.NEXT_PUBLIC_API_URL || "/api"
-    ).replace(/\/$/, "");
-
-    fetch(`${apiUrl}/reviews?productId=${prodId}`, { cache: "no-store" })
-      .then((res) => res.json())
+    listReviews(prodId)
       .then((data) => {
-        if (active && Array.isArray(data)) {
-          setFetchedReviews(data);
-        }
+        if (active && Array.isArray(data)) setFetchedReviews(data);
       })
-      .catch(() => {});
+      .catch((error) => {
+        console.warn("Could not load product reviews:", error);
+      });
 
     return () => {
       active = false;
@@ -216,19 +226,24 @@ export function ProductPage({
                 <Minus size={15} />
               </button>
               <span>{quantity}</span>
-              <button type="button" onClick={() => setQuantity(quantity + 1)}>
+              <button
+                type="button"
+                onClick={() => setQuantity(Math.min(maxAddQuantity, quantity + 1))}
+                disabled={quantity >= maxAddQuantity}
+                aria-label="Increase quantity"
+              >
                 +
               </button>
             </div>
             <AppButton
               className={`add-detail ${added ? "already-added" : ""}${product.stockQty !== undefined && product.stockQty !== null && Number(product.stockQty) <= 0 ? " out-of-stock-detail" : ""}`}
               onClick={() => onAdd(product.id, quantity)}
-              disabled={added || (product.stockQty !== undefined && product.stockQty !== null && Number(product.stockQty) <= 0)}
+              disabled={added || maxAddQuantity <= 0}
             >
               {added ? <Check size={17} /> : <ShoppingBag size={17} />}{" "}
               {added
                 ? "Already in your bag"
-                : (product.stockQty !== undefined && product.stockQty !== null && Number(product.stockQty) <= 0)
+                : maxAddQuantity <= 0
                   ? "OUT OF STOCK"
                   : `Add to bag · ₹${(product.price * quantity).toFixed(2)}`}
             </AppButton>

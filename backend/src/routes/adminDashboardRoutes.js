@@ -3,8 +3,98 @@ function registerAdminDashboardRoutes({
   asyncHandler,
   Product,
   Order,
+  Payment,
+  ReturnExchangeRequest,
+  BlogComment,
   ProductReview,
+  User,
 }) {
+  router.get(
+    "/notifications",
+    asyncHandler(async (req, res) => {
+      const grantedPages = Array.isArray(req.admin?.pageAccess)
+        ? new Set(req.admin.pageAccess)
+        : null;
+      const canSee = (page) => !grantedPages || grantedPages.has(page);
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+      const tasks = await Promise.all([
+        canSee("Orders") ? Order.find({ $or: [{ createdAt: { $gte: since } }, { updatedAt: { $gte: since } }] }).sort({ updatedAt: -1 }).limit(12).lean() : [],
+        canSee("Payments") ? Payment.find({ updatedAt: { $gte: since } }).sort({ updatedAt: -1 }).limit(12).lean() : [],
+        canSee("Returns & Exchanges") ? ReturnExchangeRequest.find({ $or: [{ createdAt: { $gte: since } }, { updatedAt: { $gte: since } }] }).sort({ updatedAt: -1 }).limit(12).lean() : [],
+        canSee("Reviews") ? ProductReview.find({ status: "pending" }).sort({ createdAt: -1 }).limit(8).lean() : [],
+        canSee("Blogs") ? BlogComment.find({ status: "pending" }).sort({ createdAt: -1 }).limit(8).lean() : [],
+        canSee("Low Stock") ? Product.find({ active: true, stockQty: { $lte: 10 }, updatedAt: { $gte: since } }).sort({ stockQty: 1, updatedAt: -1 }).limit(8).lean() : [],
+      ]);
+      const [orders, payments, requests, reviews, comments, lowStock] = tasks;
+      const notifications = [
+        ...orders.map((order) => ({
+          id: `order-${order._id}`,
+          type: "order",
+          page: "Orders",
+          query: order.orderNumber || "",
+          title: new Date(order.updatedAt || order.createdAt) - new Date(order.createdAt) > 1000 ? "Order updated" : "New order placed",
+          message: `${order.orderNumber || "Order"} · ${[order.customer?.firstName, order.customer?.lastName].filter(Boolean).join(" ") || order.customer?.email || "Customer"} · ${String(order.status || "placed").replaceAll("_", " ")}`,
+          createdAt: order.updatedAt || order.createdAt,
+        })),
+        ...payments.map((payment) => {
+          const label = payment.status === "paid" ? "Payment received" : payment.status === "failed" ? "Payment failed" : payment.status === "refunded" ? "Payment refunded" : "Payment awaiting collection";
+          return {
+            id: `payment-${payment._id}`,
+            type: "payment",
+            page: "Payments",
+            query: String(payment.orderId || ""),
+            title: label,
+            message: `${String(payment.method || "Payment").replaceAll("_", " ")} · ${new Intl.NumberFormat("en-IN", { style: "currency", currency: payment.currency || "INR" }).format(Number(payment.amount) || 0)}`,
+            createdAt: payment.updatedAt || payment.createdAt,
+          };
+        }),
+        ...requests.map((request) => ({
+          id: `return-${request._id}`,
+          type: request.type,
+          page: "Returns & Exchanges",
+          query: request.orderNumber || "",
+          title: request.refundStatus === "processed"
+            ? `Refund recorded for ${request.type || "return"}`
+            : request.refundStatus === "pending"
+              ? `Refund pending for ${request.type || "return"}`
+              : request.status === "pending"
+                ? `New ${request.type || "return/exchange"} request`
+                : `${request.type || "Return/exchange"} request updated`,
+          message: `${request.orderNumber || "Order"} · ${request.customer?.name || request.customer?.email || "Customer"}`,
+          createdAt: request.updatedAt || request.createdAt,
+        })),
+        ...reviews.map((review) => ({
+          id: `review-${review._id}`,
+          type: "review",
+          page: "Reviews",
+          query: review.orderNumber || review.userName || "",
+          title: "Review awaiting approval",
+          message: `${review.userName || "Customer"} · ${review.rating || "—"} star${review.rating === 1 ? "" : "s"}`,
+          createdAt: review.createdAt,
+        })),
+        ...comments.map((comment) => ({
+          id: `comment-${comment._id}`,
+          type: "comment",
+          page: "Blogs",
+          query: comment.authorName || "",
+          title: "Blog comment awaiting moderation",
+          message: `${comment.authorName || "Reader"} · ${String(comment.content || "").slice(0, 90)}`,
+          createdAt: comment.createdAt,
+        })),
+        ...lowStock.map((product) => ({
+          id: `stock-${product._id}`,
+          type: "inventory",
+          page: "Low Stock",
+          query: product.title || "",
+          title: Number(product.stockQty) <= 0 ? "Product out of stock" : "Product stock running low",
+          message: `${product.title || "Product"} · ${Number(product.stockQty) || 0} units remaining`,
+          createdAt: product.updatedAt || product.createdAt,
+        })),
+      ].sort((left, right) => new Date(right.createdAt || 0) - new Date(left.createdAt || 0)).slice(0, 40);
+      res.json({ items: notifications });
+    }),
+  );
+
   router.get(
     "/dashboard",
     asyncHandler(async (_req, res) => {
@@ -89,7 +179,12 @@ function registerAdminDashboardRoutes({
           },
           { $group: { _id: null, total: { $sum: "$total" } } },
         ]),
-        Order.distinct("customer.email"),
+        Promise.all([
+          User.distinct("email", { role: "customer" }),
+          Order.distinct("customer.email"),
+        ]).then(([accounts, buyers]) => [
+          ...new Set([...accounts, ...buyers].filter(Boolean).map((email) => email.toLowerCase())),
+        ]),
         ProductReview.countDocuments(),
         ProductReview.countDocuments({ isApproved: false }),
       ]);

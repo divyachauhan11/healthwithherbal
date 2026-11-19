@@ -2,14 +2,32 @@
 
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
-  Bold, Italic, Heading1, Heading2, List, ListOrdered, Quote, Code2,
-  Link2, Image, Palette, HeartPulse, Pill,
+  Bold,
+  Italic,
+  Heading1,
+  Heading2,
+  List,
+  ListOrdered,
+  Quote,
+  Code2,
+  Link2,
+  Image,
+  Palette,
+  HeartPulse,
+  Pill,
 } from "lucide-react";
 import { Modal } from "./Modal";
-import { ImageUploadField } from "../custom/AdminForms";
+import { ImageUploadField } from "../forms";
 import { slugify } from "./admin-utils";
 
-function MarkdownEditor({ value = "", onChange, required, minLength, maxLength, placeholder }) {
+function MarkdownEditor({
+  value = "",
+  onChange,
+  required,
+  minLength,
+  maxLength,
+  placeholder,
+}) {
   const textareaRef = useRef(null);
   const [preview, setPreview] = useState(false);
 
@@ -19,10 +37,15 @@ function MarkdownEditor({ value = "", onChange, required, minLength, maxLength, 
     const start = area.selectionStart;
     const end = area.selectionEnd;
     const selected = value.slice(start, end) || fallback;
-    onChange(`${value.slice(0, start)}${before}${selected}${after}${value.slice(end)}`);
+    onChange(
+      `${value.slice(0, start)}${before}${selected}${after}${value.slice(end)}`,
+    );
     requestAnimationFrame(() => {
       area.focus();
-      area.setSelectionRange(start + before.length, start + before.length + selected.length);
+      area.setSelectionRange(
+        start + before.length,
+        start + before.length + selected.length,
+      );
     });
   };
 
@@ -35,7 +58,10 @@ function MarkdownEditor({ value = "", onChange, required, minLength, maxLength, 
     const lineEndAt = value.indexOf("\n", end);
     const lineEnd = lineEndAt < 0 ? value.length : lineEndAt;
     const selected = value.slice(lineStart, lineEnd) || "Write your text here";
-    const formatted = selected.split("\n").map((line) => `${prefix}${line}`).join("\n");
+    const formatted = selected
+      .split("\n")
+      .map((line) => `${prefix}${line}`)
+      .join("\n");
     onChange(`${value.slice(0, lineStart)}${formatted}${value.slice(lineEnd)}`);
     requestAnimationFrame(() => {
       area.focus();
@@ -44,15 +70,25 @@ function MarkdownEditor({ value = "", onChange, required, minLength, maxLength, 
   };
 
   const tool = (label, Icon, action) => (
-    <button type="button" className="markdown-tool-button" title={label} aria-label={label}
-      onMouseDown={(event) => event.preventDefault()} onClick={action}>
+    <button
+      type="button"
+      className="markdown-tool-button"
+      title={label}
+      aria-label={label}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={action}
+    >
       <Icon size={16} />
     </button>
   );
 
   return (
     <div className="markdown-editor">
-      <div className="markdown-editor-toolbar" role="toolbar" aria-label="Article formatting">
+      <div
+        className="markdown-editor-toolbar"
+        role="toolbar"
+        aria-label="Article formatting"
+      >
         {tool("Bold", Bold, () => wrapSelection("**", "**"))}
         {tool("Italic", Italic, () => wrapSelection("*", "*"))}
         <span className="markdown-tool-divider" />
@@ -62,69 +98,182 @@ function MarkdownEditor({ value = "", onChange, required, minLength, maxLength, 
         {tool("Bulleted list", List, () => prefixLines("- "))}
         {tool("Numbered list", ListOrdered, () => prefixLines("1. "))}
         {tool("Quote", Quote, () => prefixLines("> "))}
-        {tool("Code block", Code2, () => wrapSelection("\n```\n", "\n```\n", "code"))}
-        {tool("Insert link", Link2, () => wrapSelection("[", "](https://example.com)", "link text"))}
-        {tool("Insert image", Image, () => wrapSelection("![", "](https://example.com/image.jpg)", "image description"))}
+        {tool("Code block", Code2, () =>
+          wrapSelection("\n```\n", "\n```\n", "code"),
+        )}
+        {tool("Insert link", Link2, () =>
+          wrapSelection("[", "](https://example.com)", "link text"),
+        )}
+        {tool("Insert image", Image, () =>
+          wrapSelection(
+            "![",
+            "](https://example.com/image.jpg)",
+            "image description",
+          ),
+        )}
         <span className="markdown-tool-divider" />
         <div className="markdown-font-size" title="Text size">
           <span>T</span>
-          <select defaultValue="" aria-label="Text size" onChange={(event) => {
-            if (event.target.value) wrapSelection("[", `]{size=${event.target.value}}`);
-            event.target.value = "";
-          }}>
-            <option value="" disabled>Font Size</option>
-            {["14px", "16px", "18px", "20px", "24px", "28px"].map((size) => <option key={size} value={size}>{size}</option>)}
+          <select
+            defaultValue=""
+            aria-label="Text size"
+            onChange={(event) => {
+              if (event.target.value)
+                wrapSelection("[", `]{size=${event.target.value}}`);
+              event.target.value = "";
+            }}
+          >
+            <option value="" disabled>
+              Font Size
+            </option>
+            {["14px", "16px", "18px", "20px", "24px", "28px"].map((size) => (
+              <option key={size} value={size}>
+                {size}
+              </option>
+            ))}
           </select>
         </div>
         <span className="markdown-tool-divider" />
-        <span className="markdown-color-label" title="Text color"><Palette size={16} /></span>
-        {["#d97706", "#2563eb", "#059669", "#dc2626", "#7c3aed", "#111827", "#000000"].map((color) => (
-          <button key={color} type="button" className="markdown-color-button" style={{ backgroundColor: color }}
-            title={`Text color ${color}`} aria-label={`Text color ${color}`}
+        <span className="markdown-color-label" title="Text color">
+          <Palette size={16} />
+        </span>
+        {[
+          "#d97706",
+          "#2563eb",
+          "#059669",
+          "#dc2626",
+          "#7c3aed",
+          "#111827",
+          "#000000",
+        ].map((color) => (
+          <button
+            key={color}
+            type="button"
+            className="markdown-color-button"
+            style={{ backgroundColor: color }}
+            title={`Text color ${color}`}
+            aria-label={`Text color ${color}`}
             onMouseDown={(event) => event.preventDefault()}
-            onClick={() => wrapSelection("[", `]{color=${color}}`)} />
+            onClick={() => wrapSelection("[", `]{color=${color}}`)}
+          />
         ))}
         <span className="markdown-tool-divider" />
-        <button type="button" className={`markdown-mode-button ${!preview ? "active" : ""}`} onClick={() => setPreview(false)}>Write</button>
-        <button type="button" className={`markdown-mode-button ${preview ? "active" : ""}`} disabled={required && (value.trim().length < (minLength || 0))} onClick={() => setPreview(true)}>Preview</button>
+        <button
+          type="button"
+          className={`markdown-mode-button ${!preview ? "active" : ""}`}
+          onClick={() => setPreview(false)}
+        >
+          Write
+        </button>
+        <button
+          type="button"
+          className={`markdown-mode-button ${preview ? "active" : ""}`}
+          disabled={required && value.trim().length < (minLength || 0)}
+          onClick={() => setPreview(true)}
+        >
+          Preview
+        </button>
       </div>
       {preview ? (
-        <div className="markdown-editor-preview"><ArticleMarkdown content={value} /></div>
+        <div className="markdown-editor-preview">
+          <ArticleMarkdown content={value} />
+        </div>
       ) : (
-        <textarea ref={textareaRef} rows={12} required={required} minLength={minLength} maxLength={maxLength}
-          value={value} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} />
+        <textarea
+          ref={textareaRef}
+          rows={12}
+          required={required}
+          minLength={minLength}
+          maxLength={maxLength}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+        />
       )}
-      <div className="markdown-editor-footer"><span>Markdown formatting</span><span>{value.length}{maxLength ? ` / ${maxLength}` : ""}</span></div>
+      <div className="markdown-editor-footer">
+        <span>Markdown formatting</span>
+        <span>
+          {value.length}
+          {maxLength ? ` / ${maxLength}` : ""}
+        </span>
+      </div>
     </div>
   );
 }
 
 function ArticleMarkdown({ content = "" }) {
-  const renderInline = (text) => text.split(/(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]*\)|\[[^\]]+\]\{(?:size|color)=[^}]+\}|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g).map((part, index) => {
-    const image = part.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
-    if (image) return <img key={index} src={image[2]} alt={image[1]} className="blog-content-inline-image" />;
-    const styled = part.match(/^\[([^\]]+)\]\{(size|color)=([^}]+)\}$/);
-    if (styled && styled[2] === "size" && /^(\d{1,2}(?:\.\d+)?)(px|rem|em|%)$/.test(styled[3])) return <span key={index} style={{ fontSize: styled[3] }}>{styled[1]}</span>;
-    if (styled && styled[2] === "color" && /^#[0-9a-f]{6}$/i.test(styled[3])) return <span key={index} style={{ color: styled[3] }}>{styled[1]}</span>;
-    const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
-    if (link) return <a key={index} href={link[2]} target="_blank" rel="noreferrer">{link[1]}</a>;
-    if (part.startsWith("**") && part.endsWith("**")) return <strong key={index}>{part.slice(2, -2)}</strong>;
-    if (part.startsWith("*") && part.endsWith("*")) return <em key={index}>{part.slice(1, -1)}</em>;
-    if (part.startsWith("`") && part.endsWith("`")) return <code key={index}>{part.slice(1, -1)}</code>;
-    return part;
-  });
+  const renderInline = (text) =>
+    text
+      .split(
+        /(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]*\)|\[[^\]]+\]\{(?:size|color)=[^}]+\}|\*\*[^*]+\*\*|\*[^*]+\*|`[^`]+`)/g,
+      )
+      .map((part, index) => {
+        const image = part.match(/^!\[([^\]]*)\]\((https?:\/\/[^)]+)\)$/);
+        if (image)
+          return (
+            <img
+              key={index}
+              src={image[2]}
+              alt={image[1]}
+              className="blog-content-inline-image"
+            />
+          );
+        const styled = part.match(/^\[([^\]]+)\]\{(size|color)=([^}]+)\}$/);
+        if (
+          styled &&
+          styled[2] === "size" &&
+          /^(\d{1,2}(?:\.\d+)?)(px|rem|em|%)$/.test(styled[3])
+        )
+          return (
+            <span key={index} style={{ fontSize: styled[3] }}>
+              {styled[1]}
+            </span>
+          );
+        if (
+          styled &&
+          styled[2] === "color" &&
+          /^#[0-9a-f]{6}$/i.test(styled[3])
+        )
+          return (
+            <span key={index} style={{ color: styled[3] }}>
+              {styled[1]}
+            </span>
+          );
+        const link = part.match(/^\[([^\]]+)\]\((https?:\/\/[^)]+)\)$/);
+        if (link)
+          return (
+            <a key={index} href={link[2]} target="_blank" rel="noreferrer">
+              {link[1]}
+            </a>
+          );
+        if (part.startsWith("**") && part.endsWith("**"))
+          return <strong key={index}>{part.slice(2, -2)}</strong>;
+        if (part.startsWith("*") && part.endsWith("*"))
+          return <em key={index}>{part.slice(1, -1)}</em>;
+        if (part.startsWith("`") && part.endsWith("`"))
+          return <code key={index}>{part.slice(1, -1)}</code>;
+        return part;
+      });
   const lines = String(content).split("\n");
   const blocks = [];
   let index = 0;
   while (index < lines.length) {
     const line = lines[index];
-    if (!line.trim()) { index += 1; continue; }
+    if (!line.trim()) {
+      index += 1;
+      continue;
+    }
     if (line.startsWith("```")) {
       const code = [];
       index += 1;
-      while (index < lines.length && !lines[index].startsWith("```")) code.push(lines[index++]);
+      while (index < lines.length && !lines[index].startsWith("```"))
+        code.push(lines[index++]);
       if (index < lines.length) index += 1;
-      blocks.push(<pre key={`code-${index}`}><code>{code.join("\n")}</code></pre>);
+      blocks.push(
+        <pre key={`code-${index}`}>
+          <code>{code.join("\n")}</code>
+        </pre>,
+      );
       continue;
     }
     const heading = line.match(/^(#{1,2})\s+(.*)$/);
@@ -133,15 +282,29 @@ function ArticleMarkdown({ content = "" }) {
       blocks.push(<Tag key={index}>{renderInline(heading[2])}</Tag>);
       index += 1;
     } else if (/^>\s?/.test(line)) {
-      blocks.push(<blockquote key={index}>{renderInline(line.replace(/^>\s?/, ""))}</blockquote>);
+      blocks.push(
+        <blockquote key={index}>
+          {renderInline(line.replace(/^>\s?/, ""))}
+        </blockquote>,
+      );
       index += 1;
     } else if (/^[-*+]\s+/.test(line)) {
       const items = [];
-      while (index < lines.length && /^[-*+]\s+/.test(lines[index])) items.push(<li key={index}>{renderInline(lines[index++].replace(/^[-*+]\s+/, ""))}</li>);
+      while (index < lines.length && /^[-*+]\s+/.test(lines[index]))
+        items.push(
+          <li key={index}>
+            {renderInline(lines[index++].replace(/^[-*+]\s+/, ""))}
+          </li>,
+        );
       blocks.push(<ul key={`ul-${index}`}>{items}</ul>);
     } else if (/^\d+\.\s+/.test(line)) {
       const items = [];
-      while (index < lines.length && /^\d+\.\s+/.test(lines[index])) items.push(<li key={index}>{renderInline(lines[index++].replace(/^\d+\.\s+/, ""))}</li>);
+      while (index < lines.length && /^\d+\.\s+/.test(lines[index]))
+        items.push(
+          <li key={index}>
+            {renderInline(lines[index++].replace(/^\d+\.\s+/, ""))}
+          </li>,
+        );
       blocks.push(<ol key={`ol-${index}`}>{items}</ol>);
     } else {
       blocks.push(<p key={index}>{renderInline(line)}</p>);
@@ -154,11 +317,18 @@ function ArticleMarkdown({ content = "" }) {
 /**
  * Pre-defined entity schemas for zero-boilerplate admin modal forms
  */
-function getEntitySchema(entity, { initial, catalog, brands = [], categories = [] }) {
+function getEntitySchema(
+  entity,
+  { initial, catalog, brands = [], categories = [] },
+) {
   const allBrands = catalog?.brands || brands || [];
   const allCategories = catalog?.categories || categories || [];
-  const productCategories = allCategories.filter((category) => !category.isParent);
-  const parentCategories = allCategories.filter((category) => category.isParent);
+  const productCategories = allCategories.filter(
+    (category) => !category.isParent,
+  );
+  const parentCategories = allCategories.filter(
+    (category) => category.isParent,
+  );
   const isEditing = Boolean(initial?._id);
 
   switch (entity?.toLowerCase()) {
@@ -198,7 +368,10 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             type: "select",
             required: true,
             placeholder: "Choose category",
-            options: productCategories.map((c) => ({ value: c.name, label: c.name })),
+            options: productCategories.map((c) => ({
+              value: c.name,
+              label: c.name,
+            })),
           },
           {
             name: "stockQty",
@@ -240,20 +413,38 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
 
               const togglePreset = (preset) => {
                 let updated;
-                if (currentTags.some((t) => t.toLowerCase() === preset.toLowerCase())) {
-                  updated = currentTags.filter((t) => t.toLowerCase() !== preset.toLowerCase());
+                if (
+                  currentTags.some(
+                    (t) => t.toLowerCase() === preset.toLowerCase(),
+                  )
+                ) {
+                  updated = currentTags.filter(
+                    (t) => t.toLowerCase() !== preset.toLowerCase(),
+                  );
                 } else {
                   updated = [...currentTags, preset];
                 }
                 onChange(updated.join(", "));
               };
 
-              const presets = ["New", "Bestseller", "Featured", "Ayurvedic", "Organic"];
+              const presets = [
+                "New",
+                "Bestseller",
+                "Featured",
+                "Ayurvedic",
+                "Organic",
+              ];
 
               return (
                 <label>
                   <span className="field-label">Product Badge (Tag)</span>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      alignItems: "center",
+                    }}
+                  >
                     <input
                       type="text"
                       value={value || ""}
@@ -324,9 +515,15 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
                   </div>
                   <small
                     className="field-hint"
-                    style={{ display: "block", marginTop: "4px", color: "#6b7280" }}
+                    style={{
+                      display: "block",
+                      marginTop: "4px",
+                      color: "#6b7280",
+                    }}
                   >
-                    You can select multiple badges (e.g. <b>New, Bestseller</b>). Selecting <b>&ldquo;New&rdquo;</b> makes the product eligible for the New launches section.
+                    You can select multiple badges (e.g. <b>New, Bestseller</b>
+                    ). Selecting <b>&ldquo;New&rdquo;</b> makes the product
+                    eligible for the New launches section.
                   </small>
                 </label>
               );
@@ -339,15 +536,18 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             rows: 4,
             span: "wide",
             required: true,
-            placeholder: "Describe the product benefits, ingredients, and usage instructions...",
+            placeholder:
+              "Describe the product benefits, ingredients, and usage instructions...",
           },
           {
             name: "images",
             label: "Product Photos (Multiple uploads supported)",
             type: "images",
             multiple: true,
+            maxImages: 9,
             span: "wide",
-            description: "Upload high-quality product images. The first photo will be used as the main storefront cover.",
+            description:
+              "Upload up to 9 high-quality product images. The first photo will be used as the main storefront cover.",
           },
           {
             name: "active",
@@ -372,7 +572,8 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             type: "text",
             span: "wide",
             required: true,
-            placeholder: "e.g. Immunity & Vitality, Organic Powders, Joint Care",
+            placeholder:
+              "e.g. Immunity & Vitality, Organic Powders, Joint Care",
           },
           {
             name: "slug",
@@ -388,7 +589,10 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             label: "Parent category (optional)",
             type: "select",
             placeholder: "No parent category",
-            options: parentCategories.map((category) => ({ value: category._id, label: category.name })),
+            options: parentCategories.map((category) => ({
+              value: category._id,
+              label: category.name,
+            })),
           },
           {
             name: "type",
@@ -401,13 +605,13 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
               {
                 value: "form",
                 label: "Product Form / Category",
-                desc: "Visible under the main \"Category\" filter in catalog (e.g. Skin Care, Hair Care, Herbal Oils, Churan).",
+                desc: 'Visible under the main "Category" filter in catalog (e.g. Skin Care, Hair Care, Herbal Oils, Churan).',
                 icon: Pill,
               },
               {
                 value: "concern",
                 label: "Health Concern",
-                desc: "Visible under the \"Shop by concern\" filter in catalog (e.g. Arthritis & Joints, Cough & Cold, Diabetic Care).",
+                desc: 'Visible under the "Shop by concern" filter in catalog (e.g. Arthritis & Joints, Cough & Cold, Diabetic Care).',
                 icon: HeartPulse,
               },
             ],
@@ -418,19 +622,22 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             type: "textarea",
             rows: 3,
             span: "wide",
-            placeholder: "Short description of this category for customer navigation and health guidelines...",
+            placeholder:
+              "Short description of this category for customer navigation and health guidelines...",
           },
-          {
-            name: "images",
-            label: "Category Icon or Cover Image",
-            type: "images",
-            multiple: false,
-            span: "wide",
-            description: "Upload an icon or banner image representing this category on the storefront.",
-          },
+          // {
+          //   name: "images",
+          //   label: "Category Icon or Cover Image",
+          //   type: "images",
+          //   multiple: false,
+          //   span: "wide",
+          //   description:
+          //     "Upload an icon or banner image representing this category on the storefront.",
+          // },
           {
             name: "isActive",
-            label: "Active in Storefront (Visible in catalog filters and navigation)",
+            label:
+              "Active in Storefront (Visible in catalog filters and navigation)",
             type: "checkbox",
             span: "wide",
             defaultValue: true,
@@ -498,7 +705,8 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             type: "textarea",
             rows: 3,
             span: "wide",
-            placeholder: "Brief history, quality standards, or product focus of this brand...",
+            placeholder:
+              "Brief history, quality standards, or product focus of this brand...",
           },
           {
             name: "images",
@@ -506,7 +714,8 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             type: "images",
             multiple: true,
             span: "wide",
-            description: "Upload the brand's logo and assets. The first photo will be used as the primary logo.",
+            description:
+              "Upload the brand's logo and assets. The first photo will be used as the primary logo.",
           },
           {
             name: "isActive",
@@ -685,7 +894,8 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
     case "blog":
       return {
         title: isEditing ? "Edit Blog Post" : "Write Blog Post",
-        subtitle: "Author helpful articles, wellness tips, and herbal remedies.",
+        subtitle:
+          "Author helpful articles, wellness tips, and herbal remedies.",
         fields: [
           {
             name: "title",
@@ -762,7 +972,8 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             required: true,
             minLength: 20,
             maxLength: 50000,
-            placeholder: "Draft your full article content using markdown formatting...",
+            placeholder:
+              "Draft your full article content using markdown formatting...",
             help: "Use the toolbar to format headings, lists, quotes, links, images, text size, and color. Preview before saving.",
           },
           {
@@ -771,7 +982,8 @@ function getEntitySchema(entity, { initial, catalog, brands = [], categories = [
             type: "images",
             multiple: false,
             span: "wide",
-            description: "Upload an eye-catching header image for this blog post.",
+            description:
+              "Upload an eye-catching header image for this blog post.",
           },
           {
             name: "tags",
@@ -857,7 +1069,9 @@ export function FormModal({
       if (rawVal !== undefined && rawVal !== null) {
         if (field.type === "date" && rawVal) {
           try {
-            initialValues[field.name] = new Date(rawVal).toISOString().slice(0, 10);
+            initialValues[field.name] = new Date(rawVal)
+              .toISOString()
+              .slice(0, 10);
           } catch {
             initialValues[field.name] = rawVal;
           }
@@ -879,12 +1093,12 @@ export function FormModal({
       Array.isArray(initial?.images) && initial.images.length
         ? initial.images
         : initial?.image
-        ? [initial.image]
-        : initial?.logoUrl
-        ? [initial.logoUrl]
-        : initial?.coverImage
-        ? [initial.coverImage]
-        : [];
+          ? [initial.image]
+          : initial?.logoUrl
+            ? [initial.logoUrl]
+            : initial?.coverImage
+              ? [initial.coverImage]
+              : [];
     setImages(imgList);
 
     setCustomizedSlugs(
@@ -893,7 +1107,7 @@ export function FormModal({
             if (f.type === "slug") acc[f.name] = true;
             return acc;
           }, {})
-        : {}
+        : {},
     );
   }, [isOpen, initial, activeFields]);
 
@@ -929,7 +1143,7 @@ export function FormModal({
 
     // Format images
     const hasImageField = activeFields.some(
-      (f) => f.type === "images" || f.type === "image"
+      (f) => f.type === "images" || f.type === "image",
     );
     if (hasImageField) {
       const primary = images[0] || "";
@@ -942,7 +1156,8 @@ export function FormModal({
     // Entity-specific cleanups
     const ent = entity?.toLowerCase();
     if (ent === "coupon") {
-      if (payload.code) payload.code = String(payload.code).toUpperCase().trim();
+      if (payload.code)
+        payload.code = String(payload.code).toUpperCase().trim();
       if (!payload.expiresAt) delete payload.expiresAt;
       if (!payload.usageLimit) delete payload.usageLimit;
       if (!payload.minOrderAmount) delete payload.minOrderAmount;
@@ -959,8 +1174,10 @@ export function FormModal({
 
     if (ent === "product") {
       if (payload.price !== undefined) payload.price = Number(payload.price);
-      if (payload.original !== undefined) payload.original = Number(payload.original);
-      if (payload.stockQty !== undefined) payload.stockQty = Number(payload.stockQty);
+      if (payload.original !== undefined)
+        payload.original = Number(payload.original);
+      if (payload.stockQty !== undefined)
+        payload.stockQty = Number(payload.stockQty);
       if (payload.badge !== undefined) {
         payload.badge = payload.badge ? String(payload.badge).trim() : null;
       }
@@ -985,10 +1202,12 @@ export function FormModal({
       if (payload.line2) payload.line2 = String(payload.line2).trim();
       if (payload.city) payload.city = String(payload.city).trim();
       if (payload.state) payload.state = String(payload.state).trim();
-      if (payload.postalCode) payload.postalCode = String(payload.postalCode).trim();
+      if (payload.postalCode)
+        payload.postalCode = String(payload.postalCode).trim();
       if (payload.country) payload.country = String(payload.country).trim();
       if (payload.tag) payload.tag = String(payload.tag).trim();
-      if (payload.isDefault !== undefined) payload.isDefault = Boolean(payload.isDefault);
+      if (payload.isDefault !== undefined)
+        payload.isDefault = Boolean(payload.isDefault);
     }
 
     onSave(payload);
@@ -1018,7 +1237,10 @@ export function FormModal({
             <span className="field-label">
               {field.label}
               {field.required && (
-                <span className="req-star" style={{ color: "#b84732", marginLeft: "2px" }}>
+                <span
+                  className="req-star"
+                  style={{ color: "#b84732", marginLeft: "2px" }}
+                >
                   *
                 </span>
               )}
@@ -1051,6 +1273,7 @@ export function FormModal({
                   images={images}
                   onChange={setImages}
                   multiple={field.multiple !== false}
+                  maxImages={field.maxImages}
                   label={field.label}
                   description={field.description}
                 />
@@ -1075,11 +1298,25 @@ export function FormModal({
           // Type: Radio Cards (e.g. Category concern vs form)
           if (field.type === "radio-cards") {
             return (
-              <div key={field.name} className="wide" style={{ margin: "4px 0" }}>
-                <span className="field-label" style={{ display: "block", marginBottom: "8px", fontWeight: "600" }}>
+              <div
+                key={field.name}
+                className="wide"
+                style={{ margin: "4px 0" }}
+              >
+                <span
+                  className="field-label"
+                  style={{
+                    display: "block",
+                    marginBottom: "8px",
+                    fontWeight: "600",
+                  }}
+                >
                   {field.label}
                   {field.required && (
-                    <span className="req-star" style={{ color: "#b84732", marginLeft: "2px" }}>
+                    <span
+                      className="req-star"
+                      style={{ color: "#b84732", marginLeft: "2px" }}
+                    >
                       *
                     </span>
                   )}
@@ -1125,12 +1362,29 @@ export function FormModal({
                           htmlFor={`radio-${field.name}-${opt.value}`}
                           style={{ cursor: "pointer", margin: 0 }}
                         >
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            {IconComponent && <IconComponent size={15} color="#236348" />}
-                            <b style={{ color: "#1c2b24", fontSize: "13px" }}>{opt.label}</b>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "6px",
+                            }}
+                          >
+                            {IconComponent && (
+                              <IconComponent size={15} color="#236348" />
+                            )}
+                            <b style={{ color: "#1c2b24", fontSize: "13px" }}>
+                              {opt.label}
+                            </b>
                           </div>
                           {opt.desc && (
-                            <span style={{ fontSize: "11.5px", color: "#6a7670", display: "block", marginTop: "3px" }}>
+                            <span
+                              style={{
+                                fontSize: "11.5px",
+                                color: "#6a7670",
+                                display: "block",
+                                marginTop: "3px",
+                              }}
+                            >
                               {opt.desc}
                             </span>
                           )}
@@ -1154,7 +1408,9 @@ export function FormModal({
                   value={form[field.name] || ""}
                   onChange={(e) => updateField(field.name, e.target.value)}
                 >
-                  <option value="">{field.placeholder || "Select option"}</option>
+                  <option value="">
+                    {field.placeholder || "Select option"}
+                  </option>
                   {(field.options || []).map((opt) => {
                     const val = typeof opt === "object" ? opt.value : opt;
                     const lbl = typeof opt === "object" ? opt.label : opt;
@@ -1166,10 +1422,18 @@ export function FormModal({
                   })}
                   {form[field.name] &&
                     !field.options?.some(
-                      (o) => (typeof o === "object" ? o.value : o) === form[field.name]
-                    ) && <option value={form[field.name]}>{form[field.name]}</option>}
+                      (o) =>
+                        (typeof o === "object" ? o.value : o) ===
+                        form[field.name],
+                    ) && (
+                      <option value={form[field.name]}>
+                        {form[field.name]}
+                      </option>
+                    )}
                 </select>
-                {field.help && <small className="field-hint">{field.help}</small>}
+                {field.help && (
+                  <small className="field-hint">{field.help}</small>
+                )}
               </label>
             );
           }
@@ -1177,7 +1441,10 @@ export function FormModal({
           // Type: Markdown editor
           if (field.type === "markdown") {
             return (
-              <div key={field.name} className={`markdown-field ${isWide ? "wide" : ""}`}>
+              <div
+                key={field.name}
+                className={`markdown-field ${isWide ? "wide" : ""}`}
+              >
                 {labelEl}
                 <MarkdownEditor
                   value={form[field.name] || ""}
@@ -1187,7 +1454,9 @@ export function FormModal({
                   maxLength={field.maxLength}
                   placeholder={field.placeholder || "Write your article..."}
                 />
-                {field.help && <small className="field-hint">{field.help}</small>}
+                {field.help && (
+                  <small className="field-hint">{field.help}</small>
+                )}
               </div>
             );
           }
@@ -1206,7 +1475,9 @@ export function FormModal({
                   onChange={(e) => updateField(field.name, e.target.value)}
                   placeholder={field.placeholder || ""}
                 />
-                {field.help && <small className="field-hint">{field.help}</small>}
+                {field.help && (
+                  <small className="field-hint">{field.help}</small>
+                )}
               </label>
             );
           }
@@ -1223,7 +1494,14 @@ export function FormModal({
                   placeholder={field.placeholder || ""}
                 />
                 {field.help && (
-                  <small style={{ fontSize: "11px", color: "#78857f", marginTop: "3px", display: "block" }}>
+                  <small
+                    style={{
+                      fontSize: "11px",
+                      color: "#78857f",
+                      marginTop: "3px",
+                      display: "block",
+                    }}
+                  >
                     {field.help.replace("{slug}", form[field.name] || "slug")}
                   </small>
                 )}
@@ -1248,7 +1526,9 @@ export function FormModal({
                 onChange={(e) =>
                   updateField(
                     field.name,
-                    field.uppercase ? e.target.value.toUpperCase() : e.target.value
+                    field.uppercase
+                      ? e.target.value.toUpperCase()
+                      : e.target.value,
                   )
                 }
                 placeholder={field.placeholder || ""}

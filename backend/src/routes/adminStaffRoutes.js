@@ -33,9 +33,19 @@ function registerAdminStaffRoutes({
       const parsed = staffUserSchema.safeParse(req.body);
       if (!parsed.success) return invalid(res, parsed);
       const data = parsed.data;
+      const normalizedEmail = data.email.toLowerCase();
+      const existingAccount = await User.exists({
+        email: normalizedEmail,
+        role: { $in: ["admin", "employee"] },
+      });
+      if (existingAccount) {
+        return res.status(409).json({
+          error: "This email address is already registered to an account. Use a different email address.",
+        });
+      }
       const item = await User.create({
         name: data.name,
-        email: data.email.toLowerCase(),
+        email: normalizedEmail,
         role: data.role,
         isActive: data.isActive,
         pageAccess: data.pageAccess,
@@ -56,12 +66,24 @@ function registerAdminStaffRoutes({
       const data = parsed.data;
       const item = await User.findOne({ _id: req.params.id, role: { $in: ["admin", "employee"] } }).select("+passwordHash");
       if (!item) return res.status(404).json({ error: "User not found." });
+      const currentAccess = [...(item.pageAccess || [])].sort();
+      const nextAccess = [...data.pageAccess].sort();
+      const pageAccessChanged = currentAccess.length !== nextAccess.length ||
+        currentAccess.some((page, index) => page !== nextAccess[index]);
+      const invalidatesSessions =
+        item.isActive !== data.isActive ||
+        item.role !== data.role ||
+        item.email.toLowerCase() !== data.email.toLowerCase() ||
+        pageAccessChanged ||
+        Boolean(data.password);
+
       item.name = data.name;
       item.email = data.email.toLowerCase();
       item.role = data.role;
       item.isActive = data.isActive;
       item.pageAccess = data.pageAccess;
       if (data.password) item.passwordHash = hashStaffPassword(data.password);
+      if (invalidatesSessions) item.authVersion = (Number(item.authVersion) || 0) + 1;
       await item.save();
       const safeItem = item.toObject();
       delete safeItem.passwordHash;

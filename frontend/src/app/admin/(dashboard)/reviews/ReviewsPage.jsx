@@ -1,5 +1,5 @@
-import { SearchField } from "../../../../components/admin/global";
-import { ReviewTable } from "../../../../components/admin/custom";
+import { SearchField } from "@/components/admin/global";
+import { ReviewTable } from "@/components/admin/tables";
 export default function ReviewsPage({
   rows,
   query,

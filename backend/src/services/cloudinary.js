@@ -74,6 +74,9 @@ function uploadBufferToCloudinary(buffer, options = {}) {
       resource_type: "image",
       fetch_format: "auto",
       quality: "auto",
+      use_filename: true,
+      unique_filename: false,
+      overwrite: true,
       ...options,
     };
 
@@ -111,6 +114,9 @@ async function uploadFilePathToCloudinary(filePath, options = {}) {
     resource_type: "image",
     fetch_format: "auto",
     quality: "auto",
+    use_filename: true,
+    unique_filename: false,
+    overwrite: true,
     ...options,
   };
 

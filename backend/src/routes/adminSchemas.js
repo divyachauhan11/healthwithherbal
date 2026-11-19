@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 const { z } = require("zod");
 const adminPortalPages = [
-  "Dashboard", "Products", "Low Stock", "Categories", "Brands", "Orders",
-  "Coupons", "Reviews", "Customers", "Blogs", "Users", "Settings", "Profile",
+  "Dashboard", "Products", "Low Stock", "Categories", "Brands", "Orders", "Payments",
+  "Coupons", "Reviews", "Returns & Exchanges", "Customers", "Blogs", "Users", "Settings", "Profile",
 ];
 const loginSchema = z.object({
   email: z.string().email().max(254),
@@ -18,7 +18,7 @@ const productSchema = z.object({
   price: z.coerce.number().min(0),
   stockQty: z.coerce.number().int().min(0),
   image: z.string().optional().default(""),
-  images: z.array(z.string()).optional().default([]),
+  images: z.array(z.string()).max(9, "A product can have at most 9 images.").optional().default([]),
   badge: z.string().trim().max(80).optional().nullable(),
   active: z.coerce.boolean().optional(),
 });

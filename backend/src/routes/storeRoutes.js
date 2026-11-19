@@ -6,14 +6,31 @@ const Category = require("../models/Category");
 const Brand = require("../models/Brand");
 const Coupon = require("../models/Coupon");
 const BlogPost = require("../models/BlogPost");
+const BlogComment = require("../models/BlogComment");
+const BlogLike = require("../models/BlogLike");
+const BlogView = require("../models/BlogView");
 const ProductReview = require("../models/ProductReview");
 const User = require("../models/User");
 const Cart = require("../models/Cart");
 const CartItem = require("../models/CartItem");
 const StoreSetting = require("../models/StoreSetting");
 const { isCouponExpired } = require("../utils/couponExpiry");
+const { attachBlogMetrics } = require("../utils/blogMetrics");
+const { rateLimit } = require("express-rate-limit");
 
 const router = express.Router();
+const blogViewLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 120,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+});
+const blogInteractionLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 40,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+});
 
 async function getStoreCategories() {
   const [categories, parentIds] = await Promise.all([
@@ -62,7 +79,7 @@ const STATE_PIN_PREFIXES = {
 router.get(
   "/init",
   asyncHandler(async (_req, res) => {
-    const [productsRaw, categories, navigationCategories, brands, coupons, blogs, reviews, announcementSetting, featuredCategorySetting] =
+    const [productsRaw, categories, navigationCategories, brands, coupons, blogs, reviews, announcementSetting, featuredCategorySetting, returnExchangeSetting] =
       await Promise.all([
         Product.find({ active: true }).sort({ legacyId: 1 }).lean(),
         getStoreCategories(),
@@ -84,7 +101,10 @@ router.get(
           .lean(),
         StoreSetting.findOne({ key: "announcements" }).lean(),
         StoreSetting.findOne({ key: "featuredParentCategories" }).lean(),
+        StoreSetting.findOne({ key: "returnExchangeEnabled" }).lean(),
       ]);
+
+    const blogsWithMetrics = await attachBlogMetrics(blogs);
 
     const parentCategories = navigationCategories.filter((category) => category.isParent);
     const selectedFeaturedIds = Array.isArray(featuredCategorySetting?.value)
@@ -111,13 +131,14 @@ router.get(
       brands,
       coupons,
       announcements: Array.isArray(announcementSetting?.value) ? announcementSetting.value : [],
+      returnExchangeEnabled: returnExchangeSetting?.value !== false,
       shippingConfig: {
-        freeShippingThreshold: 999,
-        defaultStandardRate: 49,
+        freeShippingThreshold: 0,
+        defaultStandardRate: 0,
         defaultExpressRate: 99,
         currency: "INR",
       },
-      blogs: blogs.map((b) => ({
+      blogs: blogsWithMetrics.map((b) => ({
         ...b,
         author: b.author || b.authorId?.name || "Ayurvedic Practitioner",
         date: b.publishedAt
@@ -223,7 +244,7 @@ router.post(
         }
       }
 
-      const isFree = Number(orderTotal) >= 999;
+      const isFree = true;
       const today = new Date();
       const minDate = new Date(today.getTime() + 3 * 24 * 60 * 60 * 1000);
       const maxDate = new Date(today.getTime() + 5 * 24 * 60 * 60 * 1000);
@@ -234,12 +255,12 @@ router.post(
         province,
         postalCode: cleanZip,
         eligibleForFreeShipping: isFree,
-        freeShippingThreshold: 999,
+        freeShippingThreshold: 0,
         deliveryWindow: `${minDate.toLocaleDateString("en-IN", opts)} - ${maxDate.toLocaleDateString("en-IN", opts)}`,
         rates: [
           {
             name: "Standard Shipping",
-            price: isFree ? 0 : 49,
+            price: 0,
             currency: "INR",
             estimatedDays: "3-5 business days",
             isFree,
@@ -252,9 +273,7 @@ router.post(
             isFree: false,
           },
         ],
-        message: isFree
-          ? `Standard Shipping: FREE for ${province}! (Estimated delivery in 3-5 days)`
-          : `Standard Delivery: Rs. 49.00 to ${province} (Estimated delivery in 3-5 days)`,
+        message: `Standard Shipping: FREE for ${province}! (Estimated delivery in 3-5 days)`,
       });
     }
 
@@ -388,9 +407,10 @@ router.get(
       .populate("authorId", "name email")
       .sort({ publishedAt: -1 })
       .lean();
+    const blogsWithMetrics = await attachBlogMetrics(blogs);
 
     res.json(
-      blogs.map((b) => ({
+      blogsWithMetrics.map((b) => ({
         ...b,
         author: b.author || b.authorId?.name || "Dr. Ananya Sharma, BAMS",
         date: b.publishedAt
@@ -430,6 +450,130 @@ router.get(
         : "",
       readTime: post.readTime || `${Math.max(3, Math.ceil((post.content || "").split(/\s+/).length / 180))} min read`,
     });
+  }),
+);
+
+router.get(
+  "/blogs/:slug/community",
+  asyncHandler(async (req, res) => {
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" })
+      .select("_id viewsCount allowComments")
+      .lean();
+    if (!post) return res.status(404).json({ error: "Blog post not found." });
+
+    const sessionId = String(req.query.sessionId || "").trim();
+    const [likes, commentCount, comments, liked] = await Promise.all([
+      BlogLike.countDocuments({ postId: post._id }),
+      BlogComment.countDocuments({ postId: post._id, status: "approved" }),
+      BlogComment.find({ postId: post._id, status: "approved" })
+        .select("authorName content createdAt")
+        .sort({ createdAt: -1 })
+        .limit(100)
+        .lean(),
+      sessionId
+        ? BlogLike.exists({ postId: post._id, sessionId })
+        : Promise.resolve(false),
+    ]);
+    res.json({
+      likes,
+      comments: commentCount,
+      views: post.viewsCount || 0,
+      liked: Boolean(liked),
+      allowComments: post.allowComments !== false,
+      items: comments,
+    });
+  }),
+);
+
+router.post(
+  "/blogs/:slug/view",
+  blogViewLimiter,
+  asyncHandler(async (req, res) => {
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" }).select("_id");
+    if (!post) return res.status(404).json({ error: "Blog post not found." });
+    const sessionId = String(req.body?.sessionId || "").trim().slice(0, 100);
+    if (sessionId.length < 16) return res.status(400).json({ error: "A valid visitor session is required." });
+    const priorView = await BlogView.exists({ postId: post._id, sessionId });
+    if (!priorView) {
+      await BlogView.create({ postId: post._id, sessionId });
+      await BlogPost.updateOne({ _id: post._id }, { $inc: { viewsCount: 1 } });
+    }
+    res.json({ success: true });
+  }),
+);
+
+router.post(
+  "/blogs/:slug/like",
+  blogInteractionLimiter,
+  asyncHandler(async (req, res) => {
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" }).select("_id");
+    if (!post) return res.status(404).json({ error: "Blog post not found." });
+    const sessionId = String(req.body?.sessionId || "").trim();
+    if (sessionId.length < 16 || sessionId.length > 100) {
+      return res.status(400).json({ error: "A valid visitor session is required to like this article." });
+    }
+    try {
+      await BlogLike.updateOne(
+        { postId: post._id, sessionId },
+        { $setOnInsert: { postId: post._id, sessionId } },
+        { upsert: true },
+      );
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+    }
+    res.json({ liked: true, likes: await BlogLike.countDocuments({ postId: post._id }) });
+  }),
+);
+
+router.delete(
+  "/blogs/:slug/like",
+  blogInteractionLimiter,
+  asyncHandler(async (req, res) => {
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" }).select("_id");
+    if (!post) return res.status(404).json({ error: "Blog post not found." });
+    const sessionId = String(req.query.sessionId || "").trim();
+    if (!sessionId) return res.status(400).json({ error: "A visitor session is required to remove a like." });
+    await BlogLike.deleteOne({ postId: post._id, sessionId });
+    res.json({ liked: false, likes: await BlogLike.countDocuments({ postId: post._id }) });
+  }),
+);
+
+router.get(
+  "/blogs/:slug/comments",
+  asyncHandler(async (req, res) => {
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" }).select("_id");
+    if (!post) return res.status(404).json({ error: "Blog post not found." });
+    const items = await BlogComment.find({ postId: post._id, status: "approved" })
+      .select("authorName content createdAt")
+      .sort({ createdAt: -1 })
+      .limit(100)
+      .lean();
+    res.json({ items });
+  }),
+);
+
+router.post(
+  "/blogs/:slug/comments",
+  blogInteractionLimiter,
+  asyncHandler(async (req, res) => {
+    const post = await BlogPost.findOne({ slug: req.params.slug, status: "published" }).select("_id allowComments");
+    if (!post) return res.status(404).json({ error: "Blog post not found." });
+    if (post.allowComments === false) return res.status(403).json({ error: "Comments are closed for this article." });
+    const authorName = String(req.body?.authorName || "").trim();
+    const authorEmail = String(req.body?.authorEmail || "").trim().toLowerCase();
+    const content = String(req.body?.content || "").trim();
+    if (authorName.length < 2 || authorName.length > 100) {
+      return res.status(400).json({ error: "Name must be between 2 and 100 characters." });
+    }
+    if (authorEmail.length > 254 || (authorEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authorEmail))) {
+      return res.status(400).json({ error: "Enter a valid email address." });
+    }
+    if (content.length < 3 || content.length > 2000) {
+      return res.status(400).json({ error: "Comment must be between 3 and 2,000 characters." });
+    }
+    await BlogComment.create({ postId: post._id, authorName, authorEmail, content, status: "pending" });
+    await BlogPost.updateOne({ _id: post._id }, { $inc: { commentsCount: 1 } });
+    res.status(201).json({ message: "Your comment was submitted and is awaiting approval." });
   }),
 );
 
@@ -529,6 +673,7 @@ router.post(
     } else if (userEmail) {
       const u = await User.findOne({
         email: String(userEmail).trim().toLowerCase(),
+        role: "customer",
       })
         .select("_id")
         .lean();

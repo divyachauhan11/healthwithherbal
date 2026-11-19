@@ -1,20 +1,13 @@
-export {
-  Login,
-  Metric,
-  MetricsSection,
-  StatCard,
-  Empty,
-  SearchField,
-  PageStats,
-  SalesByCategory,
-} from "./AdminUI";
+export { Login } from "./Login";
+export { Empty } from "./Empty";
+export { SearchField } from "./SearchField";
+export { PageStats } from "./PageStats";
+export { StatCard } from "./StatCard";
 export { currency, dateLabel, slugify, classStatus } from "./admin-utils";
-export { AdminSidebar, AdminHeader } from "./AdminShell";
+export { AdminHeader } from "./AdminHeader";
+export { AdminPageHeader } from "./AdminPageHeader";
+export { AdminSidebar } from "./AdminSidebar";
 export { Modal } from "./Modal";
 export { FormModal } from "./FormModal";
-export { ProductModal, AddProductModal } from "./ProductModal";
-export { CategoryModal, AddCategoryModal } from "./CategoryModal";
-export { DataTable } from "./DataTable";
-export { TablePagination, useTablePagination } from "./TablePagination";
-export { RowActionsMenu } from "../custom/AdminTables";
+export { ProductModal } from "./ProductModal";
 export { DeleteConfirmationModal } from "./DeleteConfirmationModal";

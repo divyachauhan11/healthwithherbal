@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
+  X,
   ShieldCheck,
   Tag,
   Loader2,
@@ -13,7 +14,8 @@ import {
   Lock,
 } from "lucide-react";
 import { FormModal } from "../../../components/admin/global/FormModal";
-import { LOGO_URL } from "../../../lib/store-data";
+import { ConfirmModal } from "@/components/pages/modals";
+import { LOGO_URL } from "@/lib/store-data";
 import {
   createOrder,
   validateCoupon,
@@ -21,9 +23,16 @@ import {
   saveUserAddress,
   deleteUserAddress,
   updateUserAddress,
-} from "../../../lib/api";
+} from "@/lib/api";
 
-function SavedAddressCard({ address, selected, isDefault, onSelect, onEdit, onRemove }) {
+function SavedAddressCard({
+  address,
+  selected,
+  isDefault,
+  onSelect,
+  onEdit,
+  onRemove,
+}) {
   const hasNameInLine1 =
     address.line1 &&
     address.fullName &&
@@ -31,9 +40,13 @@ function SavedAddressCard({ address, selected, isDefault, onSelect, onEdit, onRe
 
   const addressLine1 = hasNameInLine1
     ? [address.line1, address.line2].filter(Boolean).join(", ")
-    : [address.fullName, address.line1, address.line2].filter(Boolean).join(", ");
+    : [address.fullName, address.line1, address.line2]
+        .filter(Boolean)
+        .join(", ");
 
-  const stateZip = [address.state, address.postalCode].filter(Boolean).join(" - ");
+  const stateZip = [address.state, address.postalCode]
+    .filter(Boolean)
+    .join(" - ");
   const addressLine2 = [address.city, stateZip].filter(Boolean).join(", ");
 
   return (
@@ -49,7 +62,9 @@ function SavedAddressCard({ address, selected, isDefault, onSelect, onEdit, onRe
             onSelect?.();
           }}
         >
-          <span className={`checkout-custom-radio ${selected ? "checked" : ""}`}>
+          <span
+            className={`checkout-custom-radio ${selected ? "checked" : ""}`}
+          >
             <input
               type="radio"
               name="deliveryAddress"
@@ -61,8 +76,12 @@ function SavedAddressCard({ address, selected, isDefault, onSelect, onEdit, onRe
               <span className="checkout-radio-dot" />
             </span>
           </span>
-          <strong className="checkout-address-recipient">{address.fullName}</strong>
-          <span className="checkout-address-choice-tag">{(address.tag || "HOME").toUpperCase()}</span>
+          <strong className="checkout-address-recipient">
+            {address.fullName}
+          </strong>
+          <span className="checkout-address-choice-tag">
+            {(address.tag || "HOME").toUpperCase()}
+          </span>
         </label>
       </div>
 
@@ -79,7 +98,8 @@ function SavedAddressCard({ address, selected, isDefault, onSelect, onEdit, onRe
         )}
 
         <div className="checkout-address-cod-row">
-          <span className="checkout-cod-bullet">•</span> Pay on Delivery available
+          <span className="checkout-cod-bullet">•</span> Pay on Delivery
+          available
         </div>
 
         <div className="checkout-address-actions">
@@ -110,7 +130,11 @@ function SavedAddressCard({ address, selected, isDefault, onSelect, onEdit, onRe
 }
 
 function uniqueAddresses(addresses) {
-  const normalize = (value) => String(value || "").trim().replace(/\s+/g, " ").toLowerCase();
+  const normalize = (value) =>
+    String(value || "")
+      .trim()
+      .replace(/\s+/g, " ")
+      .toLowerCase();
   const seen = new Set();
 
   return addresses.filter((address) => {
@@ -125,7 +149,9 @@ function uniqueAddresses(addresses) {
       address.state,
       address.postalCode,
       address.country,
-    ].map(normalize).join("|");
+    ]
+      .map(normalize)
+      .join("|");
 
     if (seen.has(key)) return false;
     seen.add(key);
@@ -140,6 +166,7 @@ export function CheckoutPage({
   products = [],
   coupons = [],
   currentUser = null,
+  shippingOption = { method: "standard", name: "Standard Shipping", price: 0 },
   navigate,
   openContent,
 }) {
@@ -160,6 +187,8 @@ export function CheckoutPage({
   const [addressError, setAddressError] = useState("");
   const [editingAddressId, setEditingAddressId] = useState(null);
   const [savingAddress, setSavingAddress] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState(null);
+  const [deletingAddress, setDeletingAddress] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
 
   // Controlled form state
@@ -205,7 +234,9 @@ export function CheckoutPage({
     () =>
       lineItems.reduce(
         (sum, item) =>
-          sum + (Number(item.product.original) || Number(item.product.price) || 0) * item.quantity,
+          sum +
+          (Number(item.product.original) || Number(item.product.price) || 0) *
+            item.quantity,
         0,
       ),
     [lineItems],
@@ -232,9 +263,9 @@ export function CheckoutPage({
     return 0;
   }, [appliedCoupon, rawSubtotal]);
 
-  const isFreeShipping =
-    appliedCoupon?.discountType === "free_shipping" || rawSubtotal >= 75;
-  const shippingFee = rawSubtotal === 0 || isFreeShipping ? 0 : 8;
+  const shippingFee = appliedCoupon?.discountType === "free_shipping"
+    ? 0
+    : Math.max(0, Number(shippingOption.price) || 0);
   const finalTotal = Math.max(0, rawSubtotal - discountAmount + shippingFee);
 
   // Helper to map address fields to form state
@@ -295,7 +326,8 @@ export function CheckoutPage({
       })
       .catch((err) => {
         console.error("Failed to load saved addresses for checkout:", err);
-        if (active) setAddressError(err.message || "Could not load saved addresses.");
+        if (active)
+          setAddressError(err.message || "Could not load saved addresses.");
       })
       .finally(() => {
         if (active) setLoadingAddresses(false);
@@ -344,26 +376,40 @@ export function CheckoutPage({
   };
 
   const handleCloseAddressModal = () => {
-    const selectedAddress = savedAddresses.find((address) => address._id === selectedAddressId);
+    const selectedAddress = savedAddresses.find(
+      (address) => address._id === selectedAddressId,
+    );
     if (selectedAddress) applyAddressToForm(selectedAddress);
     setEditingAddressId(null);
     setAddressError("");
     setIsAddressModalOpen(false);
   };
 
-  const handleRemoveAddress = async (address) => {
-    if (!window.confirm(`Remove the saved address for ${address.fullName}?`)) return;
+  const handleRemoveAddress = (address) => {
+    setAddressToDelete(address);
+  };
+
+  const confirmRemoveAddress = async () => {
+    if (!addressToDelete?._id) return;
+    setDeletingAddress(true);
     try {
-      await deleteUserAddress(address._id);
-      const remaining = savedAddresses.filter((item) => item._id !== address._id);
+      await deleteUserAddress(addressToDelete._id);
+      const remaining = savedAddresses.filter(
+        (item) => item._id !== addressToDelete._id,
+      );
       setSavedAddresses(remaining);
-      if (selectedAddressId === address._id) {
+      if (selectedAddressId === addressToDelete._id) {
         const next = remaining.find((item) => item.isDefault) || remaining[0];
         if (next) handleSelectAddress(next);
         else setSelectedAddressId(null);
       }
+      setAddressToDelete(null);
     } catch (requestError) {
-      setAddressError(requestError.message || "Could not remove saved address.");
+      setAddressError(
+        requestError.message || "Could not remove saved address.",
+      );
+    } finally {
+      setDeletingAddress(false);
     }
   };
 
@@ -402,7 +448,9 @@ export function CheckoutPage({
   }, [currentEditingAddress, currentUser, savedAddresses.length]);
 
   const handleSaveAddress = async (values) => {
-    const fullName = (values.fullName || `${values.firstName || ""} ${values.lastName || ""}`).trim();
+    const fullName = (
+      values.fullName || `${values.firstName || ""} ${values.lastName || ""}`
+    ).trim();
     const line1 = (values.line1 || values.street || "").trim();
     const city = (values.city || "").trim();
     const postalCode = (values.postalCode || "").trim();
@@ -433,13 +481,15 @@ export function CheckoutPage({
         ? await updateUserAddress(editingAddressId, payload)
         : await saveUserAddress({
             ...payload,
-            isDefault: values.isDefault ?? (savedAddresses.length === 0),
+            isDefault: values.isDefault ?? savedAddresses.length === 0,
           });
-      setSavedAddresses((current) => uniqueAddresses(
-        editingAddressId
-          ? current.map((item) => (item._id === address._id ? address : item))
-          : [address, ...current],
-      ));
+      setSavedAddresses((current) =>
+        uniqueAddresses(
+          editingAddressId
+            ? current.map((item) => (item._id === address._id ? address : item))
+            : [address, ...current],
+        ),
+      );
       setIsAddressModalOpen(false);
       setEditingAddressId(null);
       handleSelectAddress(address);
@@ -479,7 +529,12 @@ export function CheckoutPage({
   };
 
   const continueToPayment = () => {
-    if (!selectedAddressId || !formData.street.trim() || !formData.city.trim() || !formData.postalCode.trim()) {
+    if (
+      !selectedAddressId ||
+      !formData.street.trim() ||
+      !formData.city.trim() ||
+      !formData.postalCode.trim()
+    ) {
       setError("Select or add a delivery address to continue.");
       return;
     }
@@ -508,9 +563,19 @@ export function CheckoutPage({
         <nav className="checkout-flow-steps" aria-label="Checkout progress">
           <span className="checkout-flow-step complete">Bag</span>
           <span className="checkout-flow-connector" aria-hidden="true" />
-          <span className={`checkout-flow-step ${checkoutStep === "address" ? "current" : "complete"}`} aria-current={checkoutStep === "address" ? "step" : undefined}>Address</span>
+          <span
+            className={`checkout-flow-step ${checkoutStep === "address" ? "current" : "complete"}`}
+            aria-current={checkoutStep === "address" ? "step" : undefined}
+          >
+            Address
+          </span>
           <span className="checkout-flow-connector" aria-hidden="true" />
-          <span className={`checkout-flow-step ${checkoutStep === "payment" ? "current" : ""}`} aria-current={checkoutStep === "payment" ? "step" : undefined}>Payment</span>
+          <span
+            className={`checkout-flow-step ${checkoutStep === "payment" ? "current" : ""}`}
+            aria-current={checkoutStep === "payment" ? "step" : undefined}
+          >
+            Payment
+          </span>
         </nav>
         <span className="checkout-flow-security">
           <ShieldCheck size={20} />
@@ -519,427 +584,491 @@ export function CheckoutPage({
       </header>
 
       <main className="checkout-page page-width">
-      <div className="checkout-form">
-        <span className="eyebrow">
-          <ShieldCheck size={14} />
-          Secure checkout
-        </span>
-        <h1>{checkoutStep === "address" ? "Delivery details" : "Payment method"}</h1>
-        <p className="checkout-subtitle">
-          {checkoutStep === "address"
-            ? "Confirm your delivery address to continue with your herbal order."
-            : "Choose how you would like to pay for your herbal order."}
-        </p>
+        <div className="checkout-form">
+          <span className="eyebrow">
+            <ShieldCheck size={14} />
+            Secure checkout
+          </span>
+          <h1>
+            {checkoutStep === "address" ? "Delivery details" : "Payment method"}
+          </h1>
+          <p className="checkout-subtitle">
+            {checkoutStep === "address"
+              ? "Confirm your delivery address to continue with your herbal order."
+              : "Choose how you would like to pay for your herbal order."}
+          </p>
 
-        {checkoutStep === "address" && <>
-        <section className="checkout-address-section" aria-labelledby="delivery-address-title">
-          <div className="checkout-address-section-header">
-            <h2 id="delivery-address-title">Select Delivery Address</h2>
-            <button type="button" onClick={handleUseNewAddress}>Add New Address</button>
-          </div>
-
-          {loadingAddresses && (
-            <div className="checkout-address-loading">
-              <Loader2 size={16} className="spin-animate" />
-              <span>Loading saved addresses…</span>
-            </div>
-          )}
-
-          {!loadingAddresses && defaultAddress && (
+          {checkoutStep === "address" && (
             <>
-              <h3 className="checkout-address-group-title">Default Address</h3>
-              <SavedAddressCard
-                address={defaultAddress}
-                selected={selectedAddressId === defaultAddress._id}
-                isDefault
-                onSelect={() => handleSelectAddress(defaultAddress)}
-                onEdit={() => handleEditAddress(defaultAddress)}
-                onRemove={() => handleRemoveAddress(defaultAddress)}
-              />
+              <section
+                className="checkout-address-section"
+                aria-labelledby="delivery-address-title"
+              >
+                <div className="checkout-address-section-header">
+                  <h2 id="delivery-address-title">Select Delivery Address</h2>
+                  <button type="button" onClick={handleUseNewAddress}>
+                    Add New Address
+                  </button>
+                </div>
 
-              {otherAddresses.length > 0 && (
-                <>
-                  <h3 className="checkout-address-group-title">Other Addresses</h3>
-                  <div className="checkout-address-list">
-                    {otherAddresses.map((address) => (
-                      <SavedAddressCard
-                        key={address._id}
-                        address={address}
-                        selected={selectedAddressId === address._id}
-                        onSelect={() => handleSelectAddress(address)}
-                        onEdit={() => handleEditAddress(address)}
-                        onRemove={() => handleRemoveAddress(address)}
-                      />
-                    ))}
+                {loadingAddresses && (
+                  <div className="checkout-address-loading">
+                    <Loader2 size={16} className="spin-animate" />
+                    <span>Loading saved addresses…</span>
                   </div>
-                </>
-              )}
+                )}
 
-              <button type="button" className="checkout-add-address-card" onClick={handleUseNewAddress}>
-                + Add New Address
-              </button>
+                {!loadingAddresses && defaultAddress && (
+                  <>
+                    <h3 className="checkout-address-group-title">
+                      Default Address
+                    </h3>
+                    <SavedAddressCard
+                      address={defaultAddress}
+                      selected={selectedAddressId === defaultAddress._id}
+                      isDefault
+                      onSelect={() => handleSelectAddress(defaultAddress)}
+                      onEdit={() => handleEditAddress(defaultAddress)}
+                      onRemove={() => handleRemoveAddress(defaultAddress)}
+                    />
+
+                    {otherAddresses.length > 0 && (
+                      <>
+                        <h3 className="checkout-address-group-title">
+                          Other Addresses
+                        </h3>
+                        <div className="checkout-address-list">
+                          {otherAddresses.map((address) => (
+                            <SavedAddressCard
+                              key={address._id}
+                              address={address}
+                              selected={selectedAddressId === address._id}
+                              onSelect={() => handleSelectAddress(address)}
+                              onEdit={() => handleEditAddress(address)}
+                              onRemove={() => handleRemoveAddress(address)}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    <button
+                      type="button"
+                      className="checkout-add-address-card"
+                      onClick={handleUseNewAddress}
+                    >
+                      + Add New Address
+                    </button>
+                  </>
+                )}
+
+                {!loadingAddresses && !defaultAddress && (
+                  <p className="checkout-no-addresses">
+                    Add a delivery address to continue.
+                  </p>
+                )}
+
+                {addressError && (
+                  <p role="alert" className="checkout-error">
+                    {addressError}
+                  </p>
+                )}
+              </section>
             </>
           )}
 
-          {!loadingAddresses && !defaultAddress && (
-            <p className="checkout-no-addresses">Add a delivery address to continue.</p>
-          )}
+          <form
+            id="checkout-details-form"
+            onSubmit={async (event) => {
+              event.preventDefault();
+              if (checkoutStep !== "payment") return;
+              if (paymentMethod === "payu") {
+                setError(
+                  "PayU online payments are not configured yet. Please choose Cash on Delivery.",
+                );
+                return;
+              }
+              if (
+                !selectedAddressId ||
+                !formData.street.trim() ||
+                !formData.city.trim() ||
+                !formData.postalCode.trim()
+              ) {
+                setError("Select or add a delivery address to continue.");
+                return;
+              }
+              setSubmitting(true);
+              setError("");
 
-          {addressError && (
-            <p role="alert" className="checkout-error">{addressError}</p>
-          )}
-        </section>
-
-        </>}
-
-        <form
-          id="checkout-details-form"
-          onSubmit={async (event) => {
-            event.preventDefault();
-            if (checkoutStep !== "payment") return;
-            if (paymentMethod === "payu") {
-              setError("PayU online payments are not configured yet. Please choose Cash on Delivery.");
-              return;
-            }
-            if (!selectedAddressId || !formData.street.trim() || !formData.city.trim() || !formData.postalCode.trim()) {
-              setError("Select or add a delivery address to continue.");
-              return;
-            }
-            setSubmitting(true);
-            setError("");
-
-            try {
-              const order = await createOrder({
-                customer: {
-                  firstName: formData.firstName.trim(),
-                  lastName: formData.lastName.trim(),
-                  email: formData.email.trim(),
+              try {
+                const order = await createOrder({
+                  customer: {
+                    firstName: formData.firstName.trim(),
+                    lastName: formData.lastName.trim(),
+                    email: formData.email.trim(),
+                    phone: formData.phone.trim(),
+                    street: [formData.street, formData.line2]
+                      .filter(Boolean)
+                      .join(", ")
+                      .trim(),
+                    city: formData.city.trim(),
+                    state: formData.state.trim(),
+                    postalCode: formData.postalCode.trim(),
+                    country: formData.country.trim(),
+                  },
                   phone: formData.phone.trim(),
-                  street: [formData.street, formData.line2].filter(Boolean).join(", ").trim(),
-                  city: formData.city.trim(),
-                  state: formData.state.trim(),
-                  postalCode: formData.postalCode.trim(),
-                  country: formData.country.trim(),
-                },
-                phone: formData.phone.trim(),
-                userId: currentUser?._id || null,
-                items: lineItems.map(({ product, quantity }) => ({
-                  productId: product.id,
-                  quantity,
-                })),
-                couponCode: appliedCoupon?.code,
-              });
-              onComplete(order);
-            } catch (requestError) {
-              setError(
-                requestError instanceof Error
-                  ? requestError.message
-                  : "Could not place your order.",
-              );
-            } finally {
-              setSubmitting(false);
-            }
-          }}
-        >
-          {checkoutStep === "payment" && <>
-          <button type="button" className="checkout-back-to-address" onClick={() => setCheckoutStep("address")}>
-            Back to address
-          </button>
-          <h3 className="checkout-section-title">
-            <Banknote size={20} />
-            Payment Method
-          </h3>
-
-          <button
-            type="button"
-            className={`checkout-payment-box ${paymentMethod === "cash_on_delivery" ? "selected" : ""}`}
-            aria-pressed={paymentMethod === "cash_on_delivery"}
-            onClick={() => { setPaymentMethod("cash_on_delivery"); setError(""); }}
+                  userId: currentUser?._id || null,
+                  items: lineItems.map(({ product, quantity }) => ({
+                    productId: product.id,
+                    quantity,
+                  })),
+                  couponCode: appliedCoupon?.code,
+                  shippingMethod: shippingOption.method || "standard",
+                });
+                onComplete(order);
+              } catch (requestError) {
+                setError(
+                  requestError instanceof Error
+                    ? requestError.message
+                    : "Could not place your order.",
+                );
+              } finally {
+                setSubmitting(false);
+              }
+            }}
           >
-            <div className="checkout-payment-header">
-              <div className="checkout-payment-option">
-                <span className={`payment-radio-indicator ${paymentMethod === "cash_on_delivery" ? "checked" : ""}`} />
-                <span className="checkout-payment-title">
-                  Cash on Delivery (COD)
-                </span>
-              </div>
-              <span className="checkout-payment-badge">Available</span>
-            </div>
-            <p className="payment-note">
-              Pay securely with cash or UPI QR at your doorstep when your order arrives. No advance payment required.
-            </p>
-          </button>
-
-          <button
-            type="button"
-            className={`checkout-payment-box checkout-payu-box ${paymentMethod === "payu" ? "selected" : ""}`}
-            aria-pressed={paymentMethod === "payu"}
-            onClick={() => { setPaymentMethod("payu"); setError(""); }}
-          >
-            <div className="checkout-payment-header">
-              <div className="checkout-payment-option">
-                <span className={`payment-radio-indicator ${paymentMethod === "payu" ? "checked" : ""}`} />
-                <span className="checkout-payment-title">Online Payments</span>
-                <span className="checkout-payu-wordmark" aria-label="PayU">PayU</span>
-              </div>
-              <span className="checkout-payment-badge checkout-payu-badge">Coming soon</span>
-            </div>
-            <p className="payment-note">
-              Pay securely by credit or debit card, or internet banking through PayU.
-            </p>
-            <span className="checkout-payu-pay-now" aria-hidden="true">Pay Now</span>
-          </button>
-
-          <div className="checkout-trust-guarantee">
-            <div className="guarantee-item">
-              <Leaf size={16} />
-              <span>100% Herbal Purity</span>
-            </div>
-            <div className="guarantee-item">
-              <Truck size={16} />
-              <span>Safe Doorstep Delivery</span>
-            </div>
-            <div className="guarantee-item">
-              <Lock size={16} />
-              <span>Secure Checkout</span>
-            </div>
-          </div>
-          </>}
-        </form>
-      </div>
-
-      <aside className="order-summary">
-        <div className="order-summary-header">
-          <h2>Order Summary</h2>
-          <span className="order-summary-item-count">
-            {cart.length} {cart.length === 1 ? "item" : "items"}
-          </span>
-        </div>
-
-        <div className="summary-items-list">
-          {lineItems.map(({ product, quantity }) => {
-            const unitPrice = Number(product.price) || 0;
-            const originalPrice = Number(product.original) || 0;
-            const discountPercent = originalPrice > unitPrice
-              ? Math.round(((originalPrice - unitPrice) / originalPrice) * 100)
-              : 0;
-            const stockQty = Number(product.stockQty);
-
-            return (
-              <article className="summary-item" key={product.id}>
-                <img src={product.image} alt={product.title} />
-                <div className="summary-item-details">
-                  <div className="summary-item-heading">
-                    <strong title={product.title}>{product.title}</strong>
-                    <b>₹{(unitPrice * quantity).toFixed(2)}</b>
-                  </div>
-                  <small className="summary-item-brand">
-                    Sold by: {product.brand || "Health With Herbal"}
-                  </small>
-                  <div className="summary-item-meta">
-                    {product.weightG > 0 && (
-                      <span>{product.weightG} g</span>
-                    )}
-                    <span>Qty: {quantity}</span>
-                    {product.stockQty != null && Number.isFinite(stockQty) && (
-                      <span className={stockQty <= 0 ? "out-of-stock" : "stock-available"}>
-                        {stockQty > 0 ? `${stockQty} left` : "Out of stock"}
-                      </span>
-                    )}
-                  </div>
-                  <div className="summary-item-pricing">
-                    <strong>₹{unitPrice.toFixed(2)}</strong>
-                    {originalPrice > unitPrice && (
-                      <>
-                        <del>₹{originalPrice.toFixed(2)}</del>
-                        <span>{discountPercent}% OFF</span>
-                      </>
-                    )}
-                    {quantity > 1 && <small>each</small>}
-                  </div>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-
-        {/* Coupon Card */}
-        <div className="checkout-coupon-card">
-          <div className="checkout-coupon-title">
-            <Tag size={16} color="var(--forest)" />
-            <span>Have a Coupon Code?</span>
-          </div>
-
-          {appliedCoupon ? (
-            <div className="checkout-applied-banner">
-              <div>
-                <span className="checkout-applied-code">
-                  {appliedCoupon.code}
-                </span>
-                <span className="checkout-applied-desc">
-                  {appliedCoupon.discountType === "percent"
-                    ? `${appliedCoupon.discountValue}% OFF APPLIED`
-                    : appliedCoupon.discountType === "fixed"
-                      ? `₹${appliedCoupon.discountValue} OFF APPLIED`
-                      : "FREE SHIPPING APPLIED"}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="checkout-coupon-remove-btn"
-                onClick={handleRemoveCoupon}
-                title="Remove coupon"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          ) : (
-            <div>
-              <div className="checkout-coupon-input-group">
-                <input
-                  ref={couponInputRef}
-                  type="text"
-                  className="checkout-coupon-input"
-                  placeholder="Enter discount code"
-                  value={couponCodeInput}
-                  onChange={(e) => setCouponCodeInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleApplyCoupon();
-                    }
-                  }}
-                />
+            {checkoutStep === "payment" && (
+              <>
                 <button
                   type="button"
-                  className="checkout-coupon-apply-btn"
-                  onClick={() => handleApplyCoupon()}
+                  className="checkout-back-to-address"
+                  onClick={() => setCheckoutStep("address")}
                 >
-                  Apply
+                  Back to address
                 </button>
-              </div>
+                <h3 className="checkout-section-title">
+                  <Banknote size={20} />
+                  Payment Method
+                </h3>
 
-              {coupons && coupons.length > 0 && (
-                <div className="checkout-coupon-suggestions">
-                  <span className="checkout-coupon-suggestions-label">
-                    Available offers:
-                  </span>
-                  <div className="checkout-coupon-chips">
-                    {coupons.map((c) => (
-                      <button
-                        key={c._id || c.code}
-                        type="button"
-                        className="checkout-coupon-chip"
-                        onClick={() => handleApplyCoupon(c.code)}
+                <button
+                  type="button"
+                  className={`checkout-payment-box ${paymentMethod === "cash_on_delivery" ? "selected" : ""}`}
+                  aria-pressed={paymentMethod === "cash_on_delivery"}
+                  onClick={() => {
+                    setPaymentMethod("cash_on_delivery");
+                    setError("");
+                  }}
+                >
+                  <div className="checkout-payment-header">
+                    <div className="checkout-payment-option">
+                      <span
+                        className={`payment-radio-indicator ${paymentMethod === "cash_on_delivery" ? "checked" : ""}`}
+                      />
+                      <span className="checkout-payment-title">
+                        Cash on Delivery (COD)
+                      </span>
+                    </div>
+                    <span className="checkout-payment-badge">Available</span>
+                  </div>
+                  <p className="payment-note">
+                    Pay securely with cash or UPI QR at your doorstep when your
+                    order arrives. No advance payment required.
+                  </p>
+                </button>
+
+                <button
+                  type="button"
+                  className={`checkout-payment-box checkout-payu-box ${paymentMethod === "payu" ? "selected" : ""}`}
+                  aria-pressed={paymentMethod === "payu"}
+                  onClick={() => {
+                    setPaymentMethod("payu");
+                    setError("");
+                  }}
+                >
+                  <div className="checkout-payment-header">
+                    <div className="checkout-payment-option">
+                      <span
+                        className={`payment-radio-indicator ${paymentMethod === "payu" ? "checked" : ""}`}
+                      />
+                      <span className="checkout-payment-title">
+                        Online Payments
+                      </span>
+                      <span
+                        className="checkout-payu-wordmark"
+                        aria-label="PayU"
                       >
-                        {c.code}
-                      </button>
-                    ))}
+                        PayU
+                      </span>
+                    </div>
+                    <span className="checkout-payment-badge checkout-payu-badge">
+                      Coming soon
+                    </span>
+                  </div>
+                  <p className="payment-note">
+                    Pay securely by credit or debit card, or internet banking
+                    through PayU.
+                  </p>
+                  <span className="checkout-payu-pay-now" aria-hidden="true">
+                    Pay Now
+                  </span>
+                </button>
+
+                <div className="checkout-trust-guarantee">
+                  <div className="guarantee-item">
+                    <Leaf size={16} />
+                    <span>100% Herbal Purity</span>
+                  </div>
+                  <div className="guarantee-item">
+                    <Truck size={16} />
+                    <span>Safe Doorstep Delivery</span>
+                  </div>
+                  <div className="guarantee-item">
+                    <Lock size={16} />
+                    <span>Secure Checkout</span>
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-
-          {couponError && (
-            <p className="checkout-coupon-msg error">{couponError}</p>
-          )}
-          {couponSuccess && (
-            <p className="checkout-coupon-msg success">{couponSuccess}</p>
-          )}
+              </>
+            )}
+          </form>
         </div>
 
-        <div className="summary-lines">
-          <h3 className="summary-lines-title">
-            Price Details ({cart.length} {cart.length === 1 ? "Item" : "Items"})
-          </h3>
-          <div className="summary-line-row">
-            <span>Total MRP</span>
-            <b>₹{totalMrp.toFixed(2)}</b>
+        <aside className="order-summary">
+          <div className="order-summary-header">
+            <h2>Order Summary</h2>
+            <span className="order-summary-item-count">
+              {cart.length} {cart.length === 1 ? "item" : "items"}
+            </span>
           </div>
 
-          <div className="summary-line-row discount-row">
-            <span>Discount on MRP</span>
-            <b>-₹{mrpSavings.toFixed(2)}</b>
+          <div className="summary-items-list">
+            {lineItems.map(({ product, quantity }) => {
+              const unitPrice = Number(product.price) || 0;
+              const originalPrice = Number(product.original) || 0;
+              const discountPercent =
+                originalPrice > unitPrice
+                  ? Math.round(
+                      ((originalPrice - unitPrice) / originalPrice) * 100,
+                    )
+                  : 0;
+
+              return (
+                <article className="summary-item" key={product.id}>
+                  <img src={product.image} alt={product.title} />
+                  <div className="summary-item-details">
+                    <div className="summary-item-heading">
+                      <strong title={product.title}>{product.title}</strong>
+                      <b>₹{(unitPrice * quantity).toFixed(2)}</b>
+                    </div>
+                    <small className="summary-item-brand">
+                      Sold by: {product.brand || "Health With Herbal"}
+                    </small>
+                    <div className="summary-item-meta">
+                      {product.weightG > 0 && <span>{product.weightG} g</span>}
+                      <span>Qty: {quantity}</span>
+                    </div>
+                    <div className="summary-item-pricing">
+                      <strong>₹{unitPrice.toFixed(2)}</strong>
+                      {originalPrice > unitPrice && (
+                        <>
+                          <del>₹{originalPrice.toFixed(2)}</del>
+                          <span>{discountPercent}% OFF</span>
+                        </>
+                      )}
+                      {quantity > 1 && <small>each</small>}
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
           </div>
 
-          <div className="summary-line-row coupon-discount-row">
-            <span>Coupon Discount</span>
+          {/* Coupon Card */}
+          <div className="checkout-coupon-card">
+            <div className="checkout-coupon-title">
+              <Tag size={16} color="var(--forest)" />
+              <span>Have a Coupon Code?</span>
+            </div>
+
             {appliedCoupon ? (
-              <b>
-                {discountAmount > 0
-                  ? `-₹${discountAmount.toFixed(2)}`
-                  : appliedCoupon.discountType === "free_shipping"
-                    ? "Free shipping"
-                    : "Applied"}
-              </b>
+              <div className="checkout-applied-banner">
+                <div>
+                  <span className="checkout-applied-code">
+                    {appliedCoupon.code}
+                  </span>
+                  <span className="checkout-applied-desc">
+                    {appliedCoupon.discountType === "percent"
+                      ? `${appliedCoupon.discountValue}% OFF APPLIED`
+                      : appliedCoupon.discountType === "fixed"
+                        ? `₹${appliedCoupon.discountValue} OFF APPLIED`
+                        : "FREE SHIPPING APPLIED"}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  className="checkout-coupon-remove-btn"
+                  onClick={handleRemoveCoupon}
+                  title="Remove coupon"
+                >
+                  <X size={16} />
+                </button>
+              </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => couponInputRef.current?.focus()}
-              >
-                Apply Coupon
-              </button>
+              <div>
+                <div className="checkout-coupon-input-group">
+                  <input
+                    ref={couponInputRef}
+                    type="text"
+                    className="checkout-coupon-input"
+                    placeholder="Enter discount code"
+                    value={couponCodeInput}
+                    onChange={(e) => setCouponCodeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleApplyCoupon();
+                      }
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="checkout-coupon-apply-btn"
+                    onClick={() => handleApplyCoupon()}
+                  >
+                    Apply
+                  </button>
+                </div>
+
+                {coupons && coupons.length > 0 && (
+                  <div className="checkout-coupon-suggestions">
+                    <span className="checkout-coupon-suggestions-label">
+                      Available offers:
+                    </span>
+                    <div className="checkout-coupon-chips">
+                      {coupons.map((c) => (
+                        <button
+                          key={c._id || c.code}
+                          type="button"
+                          className="checkout-coupon-chip"
+                          onClick={() => handleApplyCoupon(c.code)}
+                        >
+                          {c.code}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {couponError && (
+              <p className="checkout-coupon-msg error">{couponError}</p>
+            )}
+            {couponSuccess && (
+              <p className="checkout-coupon-msg success">{couponSuccess}</p>
             )}
           </div>
 
-          <div className="summary-line-row">
-            <span>Shipping Fee</span>
-            <b>{shippingFee === 0 ? "FREE" : `₹${shippingFee.toFixed(2)}`}</b>
+          <div className="summary-lines">
+            <h3 className="summary-lines-title">
+              Price Details ({cart.length}{" "}
+              {cart.length === 1 ? "Item" : "Items"})
+            </h3>
+            <div className="summary-line-row">
+              <span>Total MRP</span>
+              <b>₹{totalMrp.toFixed(2)}</b>
+            </div>
+
+            <div className="summary-line-row discount-row">
+              <span>Discount on MRP</span>
+              <b>-₹{mrpSavings.toFixed(2)}</b>
+            </div>
+
+            <div className="summary-line-row coupon-discount-row">
+              <span>Coupon Discount</span>
+              {appliedCoupon ? (
+                <b>
+                  {discountAmount > 0
+                    ? `-₹${discountAmount.toFixed(2)}`
+                    : appliedCoupon.discountType === "free_shipping"
+                      ? "Free shipping"
+                      : "Applied"}
+                </b>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => couponInputRef.current?.focus()}
+                >
+                  Apply Coupon
+                </button>
+              )}
+            </div>
+
+            <div className="summary-line-row">
+              <span>{shippingOption.name || "Shipping"}</span>
+              <b>{shippingFee === 0 ? "FREE" : `₹${shippingFee.toFixed(2)}`}</b>
+            </div>
+
+            <div className="summary-line-row total-row">
+              <span>Total Amount</span>
+              <b>₹{finalTotal.toFixed(2)}</b>
+            </div>
           </div>
 
-          <div className="summary-line-row total-row">
-            <span>Total Amount</span>
-            <b>₹{finalTotal.toFixed(2)}</b>
-          </div>
-        </div>
+          {error && (
+            <p role="alert" className="checkout-error">
+              {error}
+            </p>
+          )}
 
-        {error && (
-          <p role="alert" className="checkout-error">
-            {error}
-          </p>
-        )}
-
-        <p className="checkout-terms-note">
-          By placing the order, you agree to our{" "}
-          <button type="button" onClick={() => openContent?.("Terms & Conditions")}>
+          <p className="checkout-terms-note">
+            By placing the order, you agree to our{" "}
+            {/* <button type="button" onClick={() => openContent?.("Terms & Conditions")}>
             Terms of Use
           </button>{" "}
-          and{" "}
-          <button type="button" onClick={() => openContent?.("Privacy Policy")}>
-            Privacy Policy
-          </button>.
-        </p>
+          and{" "} */}
+            <button
+              type="button"
+              onClick={() => openContent?.("Privacy Policy")}
+            >
+              Privacy Policy
+            </button>
+            .
+          </p>
 
-        <button
-          type="button"
-          className="checkout-submit-btn"
-          disabled={submitting || lineItems.length === 0 || (checkoutStep === "address" && !selectedAddressId)}
-          onClick={() => {
-            if (checkoutStep === "address") {
-              continueToPayment();
-              return;
+          <button
+            type="button"
+            className="checkout-submit-btn"
+            disabled={
+              submitting ||
+              lineItems.length === 0 ||
+              (checkoutStep === "address" && !selectedAddressId)
             }
-            document.getElementById("checkout-details-form")?.requestSubmit();
-          }}
-        >
-          {checkoutStep === "address" ? (
-            <span>Continue to payment</span>
-          ) : submitting ? (
-            <>
-              <Loader2 size={18} className="spin-animate" />
-              Placing your order…
-            </>
-          ) : (
-            <span>Place Order · ₹{finalTotal.toFixed(2)}</span>
-          )}
-        </button>
+            onClick={() => {
+              if (checkoutStep === "address") {
+                continueToPayment();
+                return;
+              }
+              document.getElementById("checkout-details-form")?.requestSubmit();
+            }}
+          >
+            {checkoutStep === "address" ? (
+              <span>Continue to payment</span>
+            ) : submitting ? (
+              <>
+                <Loader2 size={18} className="spin-animate" />
+                Placing your order…
+              </>
+            ) : (
+              <span>Place Order · ₹{finalTotal.toFixed(2)}</span>
+            )}
+          </button>
 
-        <div className="checkout-secure-badge">
-          <ShieldCheck size={16} color="var(--forest)" />
-          <span>Guaranteed Authentic & Discreet Packaging</span>
-        </div>
-      </aside>
+          <div className="checkout-secure-badge">
+            <ShieldCheck size={16} color="var(--forest)" />
+            <span>Guaranteed Authentic & Discreet Packaging</span>
+          </div>
+        </aside>
       </main>
 
       <FormModal
@@ -954,8 +1083,24 @@ export function CheckoutPage({
         busy={savingAddress}
         submitLabel={editingAddressId ? "Save Changes" : "Save Address"}
       >
-        {addressError && <p role="alert" className="checkout-error wide">{addressError}</p>}
+        {addressError && (
+          <p role="alert" className="checkout-error wide">
+            {addressError}
+          </p>
+        )}
       </FormModal>
+
+      {/* Delete Saved Address Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(addressToDelete)}
+        onClose={() => setAddressToDelete(null)}
+        onConfirm={confirmRemoveAddress}
+        loading={deletingAddress}
+        title="Delete Address?"
+        message={`Are you sure you want to remove the saved address for ${addressToDelete?.fullName || "this recipient"}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </div>
   );
 }

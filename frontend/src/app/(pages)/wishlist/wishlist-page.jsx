@@ -1,6 +1,6 @@
 "use client";
 import { ArrowRight, ChevronRight, Heart } from "lucide-react";
-import { AppButton, ProductCard } from "../../../components/global/primitives";
+import { AppButton, ProductCard } from "@/components/pages/shared/primitives";
 export function WishlistPage({
   wished,
   cart,

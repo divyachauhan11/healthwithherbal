@@ -1,4 +1,5 @@
 const crypto = require("node:crypto");
+const User = require("../models/User");
 
 function sign(value, secret) {
   return crypto.createHmac("sha256", secret).update(value).digest("base64url");
@@ -21,7 +22,7 @@ function safeEqual(left, right) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-function requireAdmin(req, res, next) {
+async function requireAdmin(req, res, next) {
   const secret = process.env.ADMIN_SESSION_SECRET;
   if (!secret || secret.length < 32) {
     return res
@@ -47,17 +48,41 @@ function requireAdmin(req, res, next) {
         .status(401)
         .json({ error: "Your admin session has expired. Please sign in again." });
     }
+    if (!session.userId || !Number.isInteger(session.authVersion)) {
+      return res.status(401).json({
+        error: "Your admin session must be renewed. Please sign in again.",
+      });
+    }
+
+    const admin = await User.findById(session.userId)
+      .select("email role isActive authVersion pageAccess")
+      .lean();
+    if (
+      !admin ||
+      !admin.isActive ||
+      !["admin", "employee"].includes(admin.role) ||
+      admin.email.toLowerCase() !== String(session.email).toLowerCase() ||
+      (Number(admin.authVersion) || 0) !== session.authVersion
+    ) {
+      return res.status(401).json({
+        error: "Your admin account is no longer active or authorized. Please sign in again.",
+      });
+    }
+
     req.admin = {
       email: session.email,
-      role: session.role || "admin",
-      pageAccess: Array.isArray(session.pageAccess) ? session.pageAccess : null,
-      userId: session.userId || null,
+      role: admin.role,
+      pageAccess: admin.pageAccess || [],
+      userId: String(admin._id),
     };
     next();
-  } catch {
-    return res
-      .status(401)
-      .json({ error: "Your admin session is invalid. Please sign in again." });
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return res
+        .status(401)
+        .json({ error: "Your admin session is invalid. Please sign in again." });
+    }
+    next(error);
   }
 }
 

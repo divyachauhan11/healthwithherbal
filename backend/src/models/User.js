@@ -6,7 +6,6 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       lowercase: true,
-      unique: true,
       required: true,
     },
     passwordHash: {
@@ -19,6 +18,9 @@ const userSchema = new mongoose.Schema(
     avatarPublicId: { type: String, trim: true, default: "" },
     role: { type: String, enum: ["customer", "admin", "employee"], default: "customer" },
     isActive: { type: Boolean, default: true },
+    authVersion: { type: Number, default: 0 },
+    passwordResetTokenHash: { type: String, default: "", select: false },
+    passwordResetExpiresAt: { type: Date, default: null, select: false },
     pageAccess: { type: [String], default: [] },
   },
   {
@@ -26,4 +28,7 @@ const userSchema = new mongoose.Schema(
     versionKey: false,
   },
 );
+// A customer and an admin/employee can share an email, but each account role
+// remains unique for that email address.
+userSchema.index({ email: 1, role: 1 }, { unique: true, name: "email_role_unique" });
 module.exports = mongoose.model("User", userSchema);

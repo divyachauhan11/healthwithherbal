@@ -3,6 +3,8 @@ export { default as ProductsPage } from "../../app/admin/(dashboard)/products/Pr
 export { default as CategoriesPage } from "../../app/admin/(dashboard)/categories/CategoriesPage";
 export { default as BrandsPage } from "../../app/admin/(dashboard)/brands/BrandsPage";
 export { default as OrdersPage } from "../../app/admin/(dashboard)/orders/OrdersPage";
+export { default as PaymentsPage } from "../../app/admin/(dashboard)/payments/PaymentsPage";
+export { default as ReturnsPage } from "../../app/admin/(dashboard)/returns/ReturnsPage";
 export { default as CouponsPage } from "../../app/admin/(dashboard)/coupons/CouponsPage";
 export { default as ReviewsPage } from "../../app/admin/(dashboard)/reviews/ReviewsPage";
 export { default as CustomersPage } from "../../app/admin/(dashboard)/customers/CustomersPage";

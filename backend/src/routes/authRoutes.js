@@ -47,7 +47,7 @@ router.post("/login/request-otp", async (req, res) => {
 
     if (isEmailInput) {
       const cleanEmail = rawInput.toLowerCase();
-      user = await User.findOne({ email: cleanEmail });
+      user = await User.findOne({ email: cleanEmail, role: "customer" });
       if (!user) {
         return res.status(404).json({
           notRegistered: true,
@@ -160,7 +160,7 @@ router.post("/login/verify-otp", async (req, res) => {
 
     let user = null;
     if (rawInput.includes("@")) {
-      user = await User.findOne({ email: rawInput.toLowerCase() });
+      user = await User.findOne({ email: rawInput.toLowerCase(), role: "customer" });
     } else {
       const cleanPhone = normalizePhone(rawInput);
       user = await User.findOne({
@@ -261,7 +261,7 @@ router.post("/signup/request-otp", async (req, res) => {
     // Check if an account already exists in MongoDB with this phone or email
     const existingUser = await User.findOne({
       $or: [
-        { email: cleanEmail },
+        { email: cleanEmail, role: "customer" },
         { phone: cleanPhone },
         { phone: `+91${cleanPhone}` },
         { phone: new RegExp(`${cleanPhone}$`) },
@@ -375,7 +375,7 @@ router.post("/signup/verify-otp", async (req, res) => {
     // Ensure email or phone was not created in the meantime
     const existingUser = await User.findOne({
       $or: [
-        { email: cleanEmail },
+        { email: cleanEmail, role: "customer" },
         { phone: cleanPhone },
         { phone: `+91${cleanPhone}` },
         { phone: new RegExp(`${cleanPhone}$`) },
@@ -457,7 +457,7 @@ router.post("/social", async (req, res) => {
     const cleanEmail = claims.email.toLowerCase();
     const cleanName = (claims.name || claims.given_name || "Google Customer").trim();
 
-    let user = await User.findOne({ email: cleanEmail });
+    let user = await User.findOne({ email: cleanEmail, role: "customer" });
 
     if (user && !user.isActive) {
       return res.status(403).json({ error: "This account is unavailable. Please contact support." });

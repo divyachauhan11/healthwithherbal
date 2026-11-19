@@ -27,5 +27,4 @@ export function ProductModal({
   );
 }
 
-export const AddProductModal = ProductModal;
 export default ProductModal;

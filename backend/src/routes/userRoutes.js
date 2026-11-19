@@ -5,6 +5,7 @@ const Address = require("../models/Address");
 const User = require("../models/User");
 const Wishlist = require("../models/Wishlist");
 const Product = require("../models/Product");
+const ReturnExchangeRequest = require("../models/ReturnExchangeRequest");
 const { requireUserSession } = require("../middleware/userSession");
 
 const router = express.Router();
@@ -127,11 +128,25 @@ router.get("/orders", async (req, res) => {
     const orders = await Order.find({ $or: orConditions })
       .sort({ createdAt: -1 })
       .lean();
+    const returnRequests = orders.length
+      ? await ReturnExchangeRequest.find({ orderId: { $in: orders.map((order) => order._id) } })
+        .select("orderId type itemIndex status item quantity createdAt")
+        .sort({ createdAt: -1 })
+        .lean()
+      : [];
+    const requestsByOrderId = new Map();
+    for (const request of returnRequests) {
+      const orderId = String(request.orderId);
+      requestsByOrderId.set(orderId, [...(requestsByOrderId.get(orderId) || []), request]);
+    }
 
     return res.json({
       success: true,
       count: orders.length,
-      orders,
+      orders: orders.map((order) => ({
+        ...order,
+        returnExchangeRequests: requestsByOrderId.get(String(order._id)) || [],
+      })),
     });
   } catch (error) {
     console.error("Error fetching user orders:", error);

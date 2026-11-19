@@ -3,8 +3,8 @@ const portalPageForPath = (path) => {
   const section = path.split("/").filter(Boolean)[0];
   const pages = {
     dashboard: "Dashboard", products: "Products", "low-stock": "Low Stock",
-    categories: "Categories", brands: "Brands", coupons: "Coupons",
-    reviews: "Reviews", orders: "Orders", customers: "Customers", blogs: "Blogs",
+    categories: "Categories", brands: "Brands", coupons: "Coupons", payments: "Payments",
+    reviews: "Reviews", orders: "Orders", "return-exchange": "Returns & Exchanges", customers: "Customers", blogs: "Blogs",
     users: "Users", settings: "Settings", profile: "Profile",
   };
   return pages[section] || null;
@@ -22,9 +22,9 @@ const requirePageAccess = async (req, res, next) => {
       req.admin.email = staff.email;
       req.admin.pageAccess = staff.pageAccess || [];
     }
-    // Legacy root-admin sessions have no explicit page list and retain full access.
-    if (req.admin.role === "admin" && req.admin.pageAccess === null) return next();
     const page = portalPageForPath(req.path);
+    // The notification feed filters each event to the pages granted to this staff account.
+    if (req.path.split("/").filter(Boolean)[0] === "notifications") return next();
     // Shared media uploads are used by profile photos and other admin forms.
     // The session is authenticated above and staff accounts have already been
     // checked for active admin/employee status.

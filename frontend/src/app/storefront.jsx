@@ -1,19 +1,19 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, Check } from "lucide-react";
 import { fetchStoreInit, fetchCartFromBackend, syncCartWithBackend, fetchUserWishlist, addUserWishlistItem, removeUserWishlistItem } from "../lib/api";
-import { Header, AuthModal, CartDrawer, Footer } from "../components/global";
-import {
-  BlogPage,
-  HomePage as StoreHomePage,
-  ShopPage,
-  ProductPage,
-  WishlistPage,
-  ContentPage,
-  CheckoutPage,
-  AccountPage,
-  OrderPlacedPage,
-} from "../components/custom";
+import { Header, Footer } from "../components/pages/layout";
+import { AuthModal, CartDrawer } from "../components/pages/modals";
+import { BlogPage } from "./(pages)/blog/blog-page";
+import { HomePage as StoreHomePage } from "./(pages)/home/home-page";
+import { ShopPage } from "./(pages)/shop/shop-page";
+import { ProductPage } from "./(pages)/products/product-page";
+import { WishlistPage } from "./(pages)/wishlist/wishlist-page";
+import { ContentPage } from "./(pages)/content/content-page";
+import { CheckoutPage } from "./(pages)/checkout/checkout-page";
+import { AccountPage } from "./(pages)/account/account-page";
+import { OrderPlacedPage } from "./(pages)/order-confirmation/order-placed-page";
 import { OrderInvoicePage } from "./(pages)/order-confirmation/order-invoice-page";
 
 const contentSlug = (value) =>
@@ -65,6 +65,7 @@ export default function App() {
     brands: [],
     coupons: [],
     announcements: [],
+    returnExchangeEnabled: true,
     blogs: [],
     reviews: [],
   });
@@ -83,12 +84,34 @@ export default function App() {
   const [catalogView, setCatalogView] = useState("All Products");
   const [catalogSearch, setCatalogSearch] = useState("");
   const [contentPage, setContentPage] = useState("Our Story");
+  const [contentContext, setContentContext] = useState(null);
   const [accountStartTab, setAccountStartTab] = useState("overview");
   const [placedOrder, setPlacedOrder] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [shippingOption, setShippingOption] = useState({
+    method: "standard",
+    name: "Standard Shipping",
+    price: 0,
+    estimatedDays: "3-5 business days",
+  });
 
   const updateCart = (updater) => {
-    const nextCart = typeof updater === "function" ? updater(cartRef.current) : updater;
+    const requestedCart = typeof updater === "function" ? updater(cartRef.current) : updater;
+    const usedByProduct = new Map();
+    const nextCart = requestedCart.filter((id) => {
+      const product = storeData.products.find((item) =>
+        [item.id, item._id, item.legacyId].some((productId) =>
+          productId != null && String(productId) === String(id),
+        ),
+      );
+      const stock = Number(product?.stockQty);
+      if (!product || product.stockQty == null || !Number.isFinite(stock)) return true;
+      const key = String(product.id ?? product._id ?? product.legacyId);
+      const used = usedByProduct.get(key) || 0;
+      if (used >= Math.max(0, stock)) return false;
+      usedByProduct.set(key, used + 1);
+      return true;
+    });
     cartRef.current = nextCart;
     setCart(nextCart);
     try {
@@ -222,6 +245,29 @@ export default function App() {
   const coupons = storeData.coupons;
   const blogs = storeData.blogs;
   const reviews = storeData.reviews;
+
+  useEffect(() => {
+    if (!products.length || !cart.length) return;
+    const keptCounts = new Map();
+    const withinStock = cart.filter((id) => {
+      const product = products.find((item) =>
+        [item.id, item._id, item.legacyId].some((productId) =>
+          productId != null && String(productId) === String(id),
+        ),
+      );
+      const stock = Number(product?.stockQty);
+      if (!product || product.stockQty == null || !Number.isFinite(stock)) return true;
+      const key = String(product.id ?? product._id ?? product.legacyId);
+      const kept = keptCounts.get(key) || 0;
+      if (kept >= Math.max(0, stock)) return false;
+      keptCounts.set(key, kept + 1);
+      return true;
+    });
+    if (withinStock.length !== cart.length) {
+      updateCart(withinStock);
+      notify("Your bag was updated to match current stock levels");
+    }
+  }, [products, cart]);
 
   const selectedProduct =
     (selectedId ? products.find((product) => product.id === selectedId || product._id === selectedId || product.slug === selectedId) : null) ||
@@ -358,8 +404,9 @@ export default function App() {
     setCatalogSearch(searchTerm);
     navigate("shop");
   };
-  const openContent = (next) => {
+  const openContent = (next, context = null) => {
     setContentPage(next);
+    setContentContext(context);
     setPage("content");
     setCartOpen(false);
     window.history.pushState({ page: "content", contentPage: next }, "", `/pages/${contentSlug(next)}`);
@@ -374,6 +421,24 @@ export default function App() {
     window.setTimeout(() => setToast(""), 2200);
   };
   const addToCart = (id, quantity = 1) => {
+    const product = products.find((item) =>
+      [item.id, item._id, item.legacyId].some((productId) =>
+        productId != null && String(productId) === String(id),
+      ),
+    );
+    const stock = Number(product?.stockQty);
+    const inCart = cartRef.current.filter((item) => String(item) === String(id)).length;
+    if (product?.stockQty != null && Number.isFinite(stock)) {
+      const remaining = Math.max(0, stock - inCart);
+      const requested = Math.max(1, Math.floor(Number(quantity) || 1));
+      if (remaining < requested) {
+        notify(remaining > 0
+          ? `Only ${remaining} more available for this product`
+          : "This product has reached its available stock limit");
+        setCartOpen(true);
+        return;
+      }
+    }
     if (cart.includes(id)) {
       setCartOpen(true);
       notify("This product is already in your bag");
@@ -508,7 +573,7 @@ export default function App() {
       )}
       {page === "blog" && <BlogPage openCatalog={openCatalog} blogs={blogs} />}
       {page === "content" && (
-        <ContentPage page={contentPage} openCatalog={openCatalog} />
+          <ContentPage page={contentPage} openCatalog={openCatalog} contactContext={contentContext} />
       )}
       {page === "checkout" && currentUser && (
         <CheckoutPage
@@ -519,6 +584,7 @@ export default function App() {
           products={products}
           coupons={coupons}
           currentUser={currentUser}
+          shippingOption={shippingOption}
           onComplete={(order) => {
             updateCart([]);
             setPlacedOrder(order);
@@ -534,6 +600,7 @@ export default function App() {
         <OrderPlacedPage
           order={placedOrder}
           navigate={navigate}
+          openContent={openContent}
           currentUser={currentUser}
         />
       )}
@@ -541,6 +608,7 @@ export default function App() {
         <OrderPlacedPage
           order={selectedOrder}
           navigate={navigate}
+          openContent={openContent}
           currentUser={currentUser}
           detailMode
         />
@@ -551,9 +619,11 @@ export default function App() {
       {page === "account" && (
         <AccountPage
           currentUser={currentUser}
+          returnExchangeEnabled={storeData.returnExchangeEnabled !== false}
           initialTab={accountStartTab}
           onLogout={handleLogout}
           navigate={navigate}
+          openContent={openContent}
           openAuthModal={() => setAuthModalOpen(true)}
           notify={notify}
           onViewOrder={(order) => {
@@ -588,32 +658,38 @@ export default function App() {
           cart={cart}
           products={products}
           coupons={coupons}
+          currentUser={currentUser}
+          shippingOption={shippingOption}
+          onSelectShipping={setShippingOption}
           close={() => setCartOpen(false)}
           remove={(id) =>
             updateCart((current) => current.filter((item) => String(item) !== String(id)))
           }
-          changeQuantity={(id, change) =>
+          changeQuantity={(id, change) => {
+            const currentQuantity = cartRef.current.filter((item) => String(item) === String(id)).length;
+            const product = products.find((item) => [item.id, item._id, item.legacyId].some((productId) => productId != null && String(productId) === String(id)));
+            const stock = Number(product?.stockQty);
+            if (change > 0 && product?.stockQty != null && Number.isFinite(stock) && currentQuantity >= stock) {
+              notify("You have reached the available stock limit for this product");
+              return;
+            }
             updateCart((current) => {
               if (change > 0) return [...current, id];
               const index = current.findLastIndex((item) => String(item) === String(id));
-              return index === -1
-                ? current
-                : current.filter((_, itemIndex) => itemIndex !== index);
-            })
-          }
-          checkout={startCheckout}
-          onAdd={(id) => {
-            updateCart((current) => [...current, id]);
-            notify("Item added to cart");
+              return index === -1 ? current : current.filter((_, itemIndex) => itemIndex !== index);
+            });
           }}
+          checkout={startCheckout}
+          onAdd={addToCart}
           notify={notify}
         />
       )}
-      {toast && (
-        <div className="toast">
+      {toast && typeof document !== "undefined" && createPortal(
+        <div className="toast" role="status" aria-live="polite">
           <Check size={16} />
           {toast}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

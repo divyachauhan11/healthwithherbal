@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
-import { SearchField, ProductModal } from "../../../../components/admin/global";
-import { ProductTable } from "../../../../components/admin/custom";
+import { SearchField, ProductModal } from "@/components/admin/global";
+import { ProductTable } from "@/components/admin/tables";
 
 export default function ProductsPage({
   rows,
@@ -17,7 +17,7 @@ export default function ProductsPage({
   onClearCategoryScope,
 }) {
   return (
-    <section className="panel page-panel">
+    <section className="panel page-panel products-page-panel">
       <div className="page-tools">
         <SearchField
           value={query}

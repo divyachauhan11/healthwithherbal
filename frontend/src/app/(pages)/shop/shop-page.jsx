@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { ChevronDown, Leaf, X } from "lucide-react";
-import { AppButton, ProductCard } from "../../../components/global/primitives";
-import { fetchStoreInit, listProducts } from "../../../lib/api";
+import { AppButton, ProductCard } from "@/components/pages/shared/primitives";
+import { fetchStoreInit, listProducts } from "@/lib/api";
 
 export function ShopPage({
   wished,

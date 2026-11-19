@@ -19,9 +19,13 @@ import {
   XCircle,
   Star,
   Loader2,
+  RotateCcw,
 } from "lucide-react";
-import { fetchOrderDetails, getOrderLiveStreamUrl } from "../../../lib/api";
-import { ProductReviewModal } from "../../../components/global";
+import {
+  fetchOrderDetails,
+  getOrderLiveStreamUrl,
+} from "@/lib/api";
+import { ProductReviewModal } from "@/components/pages/modals";
 
 const STAGES = [
   {
@@ -100,11 +104,77 @@ const isDividerActive = (dividerIndex, status) => {
 };
 
 const orderProductImage = (item) =>
-  item?.image || item?.productImage || item?.product?.image || item?.product?.images?.[0] || "";
+  item?.image ||
+  item?.productImage ||
+  item?.product?.image ||
+  item?.product?.images?.[0] ||
+  "";
+
+const isRequestForOrderItem = (request, item, itemIndex) => {
+  if (Number.isInteger(request.itemIndex)) return request.itemIndex === itemIndex;
+  const requestedTitle = String(request.item?.title || "").trim().toLowerCase();
+  const orderItemTitle = String(item.titleSnapshot || item.title || "").trim().toLowerCase();
+  return requestedTitle && requestedTitle === orderItemTitle;
+};
+
+const statusLabel = (value) => value ? `${value.charAt(0).toUpperCase()}${value.slice(1)}` : "Pending";
+
+function ReturnExchangeProgress({ request }) {
+  const requestStatus = request.status || "pending";
+  const rejected = requestStatus === "rejected";
+  const steps = [
+    { label: "Request submitted", state: "complete", detail: "Received" },
+    {
+      label: "Admin review",
+      state: requestStatus === "pending" ? "current" : rejected ? "rejected" : "complete",
+      detail: rejected ? "Rejected" : requestStatus === "pending" ? "Under review" : "Reviewed",
+    },
+    {
+      label: request.type === "exchange" ? "Exchange resolution" : "Return resolution",
+      state: requestStatus === "approved" ? "current" : requestStatus === "completed" ? "complete" : "pending",
+      detail: requestStatus === "approved" ? "In progress" : requestStatus === "completed" ? "Completed" : rejected ? "Not continued" : "Waiting",
+    },
+  ];
+  const refundLabel = request.type === "exchange"
+    ? "Not applicable"
+    : request.refundStatus === "processed"
+      ? "Completed"
+      : request.refundStatus === "not_required" ? "Not required" : "Pending";
+  const refundClass = request.type === "exchange" || request.refundStatus === "not_required"
+    ? "not-required"
+    : request.refundStatus === "processed" ? "complete" : "pending";
+  const itemTitle = request.item?.title || "Requested item";
+
+  return (
+    <article className="return-exchange-progress-card">
+      <div className="return-exchange-progress-heading">
+        <div>
+          <strong>{request.type === "exchange" ? "Exchange" : "Return"} · {itemTitle}</strong>
+          <span>Request status: {statusLabel(requestStatus)}</span>
+        </div>
+        <span className={`return-progress-refund refund-${refundClass}`}>
+          Refund: {refundLabel}
+        </span>
+      </div>
+      <div className="return-progress-track">
+        {steps.map((step, index) => (
+          <div className="return-progress-part" key={step.label}>
+            <div className={`return-progress-step step-${step.state}`}>
+              <span className="return-progress-node">{step.state === "complete" ? <Check size={13} /> : index + 1}</span>
+              <span className="return-progress-copy"><strong>{step.label}</strong><small>{step.detail}</small></span>
+            </div>
+            {index < steps.length - 1 && <span className={`return-progress-connector${step.state === "complete" ? " is-complete" : ""}`} />}
+          </div>
+        ))}
+      </div>
+    </article>
+  );
+}
 
 export function OrderPlacedPage({
   order,
   navigate,
+  openContent,
   currentUser,
   detailMode = false,
 }) {
@@ -113,10 +183,6 @@ export function OrderPlacedPage({
   const [liveOrderData, setLiveOrderData] = useState(null);
   const [reviewModalItem, setReviewModalItem] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
-  const [returnExchangeOpen, setReturnExchangeOpen] = useState(false);
-  const [returnRequestType, setReturnRequestType] = useState("return");
-  const [returnRequestItem, setReturnRequestItem] = useState("");
-  const [returnRequestReason, setReturnRequestReason] = useState("");
 
   useEffect(() => {
     if (!detailMode || order || typeof window === "undefined") return;
@@ -352,32 +418,6 @@ export function OrderPlacedPage({
     }
   };
 
-  const startReturnExchangeEmail = (event) => {
-    event.preventDefault();
-    const item = (displayOrder.items || []).find((entry, index) =>
-      String(entry.legacyId || entry.product || index) === returnRequestItem,
-    );
-    const itemName = item?.titleSnapshot || item?.title || "All items in this order";
-    const requestLabel = returnRequestType === "return" ? "Return and refund" : "Exchange";
-    const subject = `${requestLabel} request — Order ${displayOrder.orderNumber}`;
-    const body = [
-      "Hello Health With Herbal Care Team,",
-      "",
-      `I would like to request ${returnRequestType === "return" ? "a return for refund" : "an exchange"} for order ${displayOrder.orderNumber}.`,
-      `Product: ${itemName}`,
-      `Reason: ${returnRequestReason.trim() || "Please contact me to discuss this request."}`,
-      "",
-      "Please advise me before I mail the product back and provide the correct return address.",
-      "I understand eligible product returns must be unopened, unused, in new condition with original packaging and accessories, and requested within 10 days of receipt. Return shipping, insurance, and any duties are paid by the buyer.",
-      "",
-      "Thank you.",
-      currentUser?.name || "",
-      currentUser?.email || "",
-    ].join("\n");
-    window.location.href = `mailto:care@healthwithherbal.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    setReturnExchangeOpen(false);
-  };
-
   const orderDate = new Date(
     displayOrder.createdAt || Date.now(),
   ).toLocaleDateString("en-IN", {
@@ -390,7 +430,10 @@ export function OrderPlacedPage({
 
   const address = displayOrder.shippingAddress || displayOrder.customer || {};
   const firstItemImage = orderProductImage(displayOrder.items?.[0]);
-  const additionalItemCount = Math.max(0, (displayOrder.items?.length || 0) - 1);
+  const additionalItemCount = Math.max(
+    0,
+    (displayOrder.items?.length || 0) - 1,
+  );
 
   return (
     <div className="order-placed-wrapper page-width">
@@ -400,9 +443,20 @@ export function OrderPlacedPage({
       <div className="order-placed-hero">
         {firstItemImage ? (
           <div className="order-placed-product-cover">
-            <img src={firstItemImage} alt={displayOrder.items?.[0]?.titleSnapshot || displayOrder.items?.[0]?.title || "Ordered product"} />
-            <span className="order-product-confirmed"><CheckCircle2 size={22} strokeWidth={2.4} /></span>
-            {additionalItemCount > 0 && <span className="order-product-more">+{additionalItemCount}</span>}
+            <img
+              src={firstItemImage}
+              alt={
+                displayOrder.items?.[0]?.titleSnapshot ||
+                displayOrder.items?.[0]?.title ||
+                "Ordered product"
+              }
+            />
+            <span className="order-product-confirmed">
+              <CheckCircle2 size={22} strokeWidth={2.4} />
+            </span>
+            {additionalItemCount > 0 && (
+              <span className="order-product-more">+{additionalItemCount}</span>
+            )}
           </div>
         ) : (
           <div className="order-placed-check-circle">
@@ -519,6 +573,19 @@ export function OrderPlacedPage({
             })}
           </div>
         )}
+        {(displayOrder.returnExchangeRequests || []).length > 0 && (
+          <section className="return-exchange-progress-section" aria-label="Return and exchange status timeline">
+            <div className="return-exchange-progress-section-heading">
+              <RotateCcw size={16} />
+              <h4>Return &amp; exchange progress</h4>
+            </div>
+            <div className="return-exchange-progress-list">
+              {displayOrder.returnExchangeRequests.map((request) => (
+                <ReturnExchangeProgress key={request._id} request={request} />
+              ))}
+            </div>
+          </section>
+        )}
       </div>
 
       {/* =================================================================== */}
@@ -561,8 +628,17 @@ export function OrderPlacedPage({
                 <div key={idx} className="order-placed-item-row">
                   <div className="item-icon-box">
                     {orderProductImage(item) ? (
-                      <img className="ordered-product-image" src={orderProductImage(item)} alt={item.titleSnapshot || item.title || "Ordered product"} loading="lazy" />
-                    ) : <Package size={22} />}
+                      <img
+                        className="ordered-product-image"
+                        src={orderProductImage(item)}
+                        alt={
+                          item.titleSnapshot || item.title || "Ordered product"
+                        }
+                        loading="lazy"
+                      />
+                    ) : (
+                      <Package size={22} />
+                    )}
                   </div>
                   <div className="item-text-info">
                     <strong className="item-title">
@@ -595,6 +671,21 @@ export function OrderPlacedPage({
                         </button>
                       )}
                     </div>
+                    {(displayOrder.returnExchangeRequests || [])
+                      .filter((request) => isRequestForOrderItem(request, item, idx))
+                      .map((request) => (
+                        <div className="order-item-return-status" key={request._id}>
+                          <div className={`order-item-return-request order-request-${request.status || "pending"}`}>
+                            <RotateCcw size={14} />
+                            <span>{request.type === "exchange" ? "Exchange" : "Return"} request</span>
+                            <strong>{statusLabel(request.status || "pending")}</strong>
+                          </div>
+                          <div className={`order-item-refund-status order-refund-${request.refundStatus || "pending"}`}>
+                            <span>Refund</span>
+                            <strong>{request.refundStatus === "processed" ? "Completed" : request.refundStatus === "not_required" ? "Not required" : "Pending"}</strong>
+                          </div>
+                        </div>
+                      ))}
                   </div>
                   <div className="item-price-col">
                     <span className="unit-calc">
@@ -773,13 +864,22 @@ export function OrderPlacedPage({
       {detailMode && currentStatus === "delivered" && (
         <section className="return-exchange-panel">
           <div>
-            <span className="return-exchange-eyebrow">Delivered order support</span>
+            <span className="return-exchange-eyebrow">
+              Delivered order support
+            </span>
             <h2>Need a return or exchange?</h2>
             <p>
-              Unopened and unused products in new condition, with original packaging and accessories, can be requested for a 100% refund within 10 days of receipt. Buyers pay return shipping, insurance, and any duties. Please contact us before mailing anything back.
+              Unopened and unused products in new condition, with original
+              packaging and accessories, can be requested for a 100% refund
+              within 10 days of receipt. Buyers pay return shipping, insurance,
+              and any duties. Please contact us before mailing anything back.
             </p>
           </div>
-          <button type="button" className="app-button" onClick={() => setReturnExchangeOpen(true)}>
+          <button
+            type="button"
+            className="app-button"
+            onClick={() => openContent?.("Contact Us", { orderNumber: displayOrder.orderNumber || displayOrder._id })}
+          >
             Request return or exchange
           </button>
         </section>
@@ -815,37 +915,6 @@ export function OrderPlacedPage({
           <ArrowRight size={16} />
         </button>
       </div>
-
-      {returnExchangeOpen && (
-        <div className="return-exchange-overlay" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setReturnExchangeOpen(false); }}>
-          <section className="return-exchange-dialog" role="dialog" aria-modal="true" aria-labelledby="return-exchange-title">
-            <button type="button" className="return-exchange-close" aria-label="Close" onClick={() => setReturnExchangeOpen(false)}>×</button>
-            <span className="return-exchange-eyebrow">Order {displayOrder.orderNumber}</span>
-            <h2 id="return-exchange-title">Return or exchange request</h2>
-            <p className="return-exchange-help">This opens an email to our care team. Please wait for our return instructions before mailing the product.</p>
-            <form onSubmit={startReturnExchangeEmail}>
-              <fieldset className="return-exchange-options">
-                <legend>What would you like to request?</legend>
-                <label><input type="radio" name="requestType" value="return" checked={returnRequestType === "return"} onChange={() => setReturnRequestType("return")} /> Return for refund</label>
-                <label><input type="radio" name="requestType" value="exchange" checked={returnRequestType === "exchange"} onChange={() => setReturnRequestType("exchange")} /> Exchange (subject to confirmation)</label>
-              </fieldset>
-              <label className="return-exchange-field">Product
-                <select value={returnRequestItem} onChange={(event) => setReturnRequestItem(event.target.value)}>
-                  <option value="">All items / not sure</option>
-                  {(displayOrder.items || []).map((item, index) => <option key={`${item.legacyId || item.product || index}`} value={String(item.legacyId || item.product || index)}>{item.titleSnapshot || item.title} · Qty {item.quantity}</option>)}
-                </select>
-              </label>
-              <label className="return-exchange-field">Reason (optional)
-                <textarea rows={3} value={returnRequestReason} onChange={(event) => setReturnRequestReason(event.target.value)} placeholder="Tell us how we can help" />
-              </label>
-              <div className="return-exchange-dialog-actions">
-                <button type="button" className="app-button secondary" onClick={() => setReturnExchangeOpen(false)}>Cancel</button>
-                <button type="submit" className="app-button">Email care team</button>
-              </div>
-            </form>
-          </section>
-        </div>
-      )}
 
       {/* Product Review Modal for Delivered Orders */}
       <ProductReviewModal

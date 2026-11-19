@@ -14,10 +14,10 @@ import {
   Rating,
   SectionHeading,
   ProductCard,
-} from "../../../components/global/primitives";
-import { NewLaunchesSection } from "../../../components/custom/sections/new-launches";
-import { BrandsSliderSection } from "../../../components/custom/sections/brand-slider";
-import { WhyHealthWithHerbal } from "../../../components/custom/sections/why-section";
+} from "@/components/pages/shared/primitives";
+import { NewLaunchesSection } from "@/components/pages/sections/home/NewLaunches";
+import { BrandsSliderSection } from "@/components/pages/sections/home/BrandSlider";
+import { WhyHealthWithHerbal } from "@/components/pages/sections/home/WhySection";
 
 export function HomePage({
   navigate,
@@ -45,7 +45,12 @@ export function HomePage({
     .map((c) => (typeof c === "string" ? c : c.name));
   const featuredCategoryIdSet = new Set(featuredCategoryIds.map(String));
   const featuredCategories = navigationCategories
-    .filter((category) => category && category.isParent && featuredCategoryIdSet.has(String(category._id || category.id)))
+    .filter(
+      (category) =>
+        category &&
+        category.isParent &&
+        featuredCategoryIdSet.has(String(category._id || category.id)),
+    )
     .slice(0, 4);
   const categoryTones = ["ochre", "green", "rose", "blue"];
 
@@ -94,7 +99,10 @@ export function HomePage({
               >
                 Explore all products <ArrowRight size={17} />
               </AppButton>
-              <AppButton variant="ghost" onClick={() => openContent("Our Story")}>
+              <AppButton
+                variant="ghost"
+                onClick={() => openContent("Our Story")}
+              >
                 Our story
               </AppButton>
             </div>
@@ -181,13 +189,19 @@ export function HomePage({
             <button
               type="button"
               className={`category-card ${categoryTones[index % categoryTones.length]}`}
-              key={category._id || category.id || category.slug || category.name}
+              key={
+                category._id || category.id || category.slug || category.name
+              }
               onClick={() => openCatalog(category.name)}
             >
-              <span className="category-letter">{category.name?.charAt(0)}</span>
+              <span className="category-letter">
+                {category.name?.charAt(0)}
+              </span>
               <span>
                 <strong>{category.name}</strong>
-                <small>{category.description || "Explore this collection"}</small>
+                <small>
+                  {category.description || "Explore this collection"}
+                </small>
               </span>
               <ChevronRight />
             </button>
@@ -220,7 +234,9 @@ export function HomePage({
                 onWish={() => onWish(product.id)}
                 onAdd={() => onAdd(product.id)}
                 onOpen={() => openProduct(product.id)}
-                onSimilar={() => openCatalog(product.category || "All Products")}
+                onSimilar={() =>
+                  openCatalog(product.category || "All Products")
+                }
               />
             ))}
           </div>

@@ -6,12 +6,18 @@ const ProductCategory = require("../models/ProductCategory");
 const InventoryLog = require("../models/InventoryLog");
 const Order = require("../models/Order");
 const OrderItem = require("../models/OrderItem");
+const Payment = require("../models/Payment");
 const Category = require("../models/Category");
 const Brand = require("../models/Brand");
 const Coupon = require("../models/Coupon");
 const ProductReview = require("../models/ProductReview");
 const BlogPost = require("../models/BlogPost");
+const BlogComment = require("../models/BlogComment");
+const BlogLike = require("../models/BlogLike");
+const BlogView = require("../models/BlogView");
 const User = require("../models/User");
+const Address = require("../models/Address");
+const ReturnExchangeRequest = require("../models/ReturnExchangeRequest");
 const { syncProductRating } = require("../utils/syncRatings");
 
 const router = express.Router();
@@ -25,6 +31,7 @@ const registerAdminSettingsRoutes = require("./adminSettingsRoutes");
 const registerAdminDashboardRoutes = require("./adminDashboardRoutes");
 const registerAdminCustomerRoutes = require("./adminCustomerRoutes");
 const registerAdminProfileRoutes = require("./adminProfileRoutes");
+const registerAdminReturnExchangeRoutes = require("./adminReturnExchangeRoutes");
 
 const {
   adminPortalPages,
@@ -60,7 +67,11 @@ registerAdminDashboardRoutes({
   asyncHandler,
   Product,
   Order,
+  Payment,
+  ReturnExchangeRequest,
+  BlogComment,
   ProductReview,
+  User,
 });
 registerAdminProductRoutes({
   router,
@@ -86,6 +97,7 @@ registerAdminOrderRoutes({
   validId,
   invalid,
 });
+registerAdminReturnExchangeRoutes({ router, asyncHandler, Request: ReturnExchangeRequest, Order, Payment, validId });
 registerAdminCatalogRoutes({
   router,
   asyncHandler,
@@ -113,13 +125,21 @@ registerAdminCustomerRoutes({
   router,
   asyncHandler,
   Order,
+  User,
+  Payment,
+  Address,
+  validId,
 });
 registerAdminBlogRoutes({
   router,
   asyncHandler,
   BlogPost,
+  BlogComment,
+  BlogLike,
+  BlogView,
   blogSchema,
   invalid,
+  validId,
   User,
   slugify,
 });

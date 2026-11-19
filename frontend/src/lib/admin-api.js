@@ -1,63 +1,59 @@
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "/api").replace(/\/$/, "");
+import { apiRequest } from "@/lib/api-client";
+
+function handleAdminUnauthorized(error) {
+  if (error?.status !== 401 || typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem("hwh-admin-session");
+    window.localStorage.removeItem("hwh-admin-user");
+  } catch {
+    // The in-memory session is cleared by the admin portal event listener.
+  }
+  window.dispatchEvent(new CustomEvent("hwh-admin-session-invalid", {
+    detail: { message: error.message },
+  }));
+}
 
 export async function adminRequest(path, { token, method = "GET", body } = {}) {
-  const response = await fetch(`${API_BASE_URL}/admin${path}`, {
-    method,
-    headers: {
-      ...(body ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    cache: "no-store",
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const details = result.details
-      ? Object.entries(result.details)
-          .flatMap(([field, messages]) =>
-            (Array.isArray(messages) ? messages : [messages]).map(
-              (message) => `${field}: ${message}`,
-            ),
-          )
-          .join("; ")
-      : "";
-    throw new Error(
-      [result.error || "The admin request failed.", details]
-        .filter(Boolean)
-        .join(" "),
-    );
+  try {
+    return await apiRequest(`/admin${path}`, {
+      method,
+      body,
+      cache: "no-store",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+  } catch (error) {
+    handleAdminUnauthorized(error);
+    throw error;
   }
-  return result;
 }
 
 export async function adminUploadRequest(files, { token } = {}) {
-  const isFormData = files instanceof FormData;
+  const isFormData = typeof FormData !== "undefined" && files instanceof FormData;
   const formData = isFormData ? files : new FormData();
 
   if (!isFormData) {
-    if (Array.isArray(files)) {
-      files.forEach((file) => formData.append("images", file));
-    } else if (typeof FileList !== "undefined" && files instanceof FileList) {
+    if (Array.isArray(files)) files.forEach((file) => formData.append("images", file));
+    else if (typeof FileList !== "undefined" && files instanceof FileList) {
       Array.from(files).forEach((file) => formData.append("images", file));
-    } else if (files) {
-      formData.append("images", files);
-    }
+    } else if (files) formData.append("images", files);
   }
 
-  const adminToken =
-    token ||
-    (typeof window !== "undefined"
-      ? window.localStorage.getItem("hwh-admin-session")
-      : "");
-  const response = await fetch(`${API_BASE_URL}/admin/upload`, {
-    method: "POST",
-    headers: {
-      ...(adminToken ? { Authorization: `Bearer ${adminToken}` } : {}),
-    },
-    body: formData,
-  });
-  const result = await response.json().catch(() => ({}));
-  if (!response.ok)
-    throw new Error(result.error || "The image upload failed.");
-  return result;
+  let adminToken = token || "";
+  if (!adminToken && typeof window !== "undefined") {
+    try {
+      adminToken = window.localStorage.getItem("hwh-admin-session") || "";
+    } catch {
+      // The request will return 401 and clear the in-memory portal session.
+    }
+  }
+  try {
+    return await apiRequest("/admin/upload", {
+      method: "POST",
+      body: formData,
+      headers: adminToken ? { Authorization: `Bearer ${adminToken}` } : {},
+    });
+  } catch (error) {
+    handleAdminUnauthorized(error);
+    throw error;
+  }
 }

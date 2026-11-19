@@ -18,6 +18,7 @@ import {
   Star,
   Sparkles,
   Pencil,
+  RotateCcw,
 } from "lucide-react";
 import {
   fetchUserOrders,
@@ -25,9 +26,16 @@ import {
   saveUserAddress,
   updateUserAddress,
   deleteUserAddress,
-} from "../../../lib/api";
-import { ProductReviewModal } from "../../../components/global";
+  submitReturnExchangeRequest,
+  uploadReturnExchangePhotos,
+} from "@/lib/api";
+import { ProductReviewModal, ConfirmModal } from "@/components/pages/modals";
 import { FormModal } from "../../../components/admin/global/FormModal";
+
+const returnRequestMatchesItem = (request, item, itemIndex) => {
+  if (Number.isInteger(request.itemIndex)) return request.itemIndex === itemIndex;
+  return String(request.item?.title || "").trim().toLowerCase() === String(item.title || "").trim().toLowerCase();
+};
 
 export function AccountPage({
   currentUser,
@@ -35,8 +43,10 @@ export function AccountPage({
   onViewOrder,
   onLogout,
   navigate,
+  openContent,
   openAuthModal,
   notify,
+  returnExchangeEnabled = true,
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [orders, setOrders] = useState([]);
@@ -44,6 +54,56 @@ export function AccountPage({
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
   const [reviewModalData, setReviewModalData] = useState(null);
+  const [returnRequestData, setReturnRequestData] = useState(null);
+  const [returnRequestType, setReturnRequestType] = useState("return");
+  const [returnRequestQuantity, setReturnRequestQuantity] = useState(1);
+  const [returnRequestReason, setReturnRequestReason] = useState("");
+  const [savingReturnRequest, setSavingReturnRequest] = useState(false);
+  const [returnRequestPhotos, setReturnRequestPhotos] = useState([]);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [addressToDelete, setAddressToDelete] = useState(null);
+  const [deletingAddress, setDeletingAddress] = useState(false);
+
+  const sendReturnRequest = async (event) => {
+    event.preventDefault();
+    if (!returnRequestData) return;
+    setSavingReturnRequest(true);
+    try {
+      const photoUrls = returnRequestPhotos.length
+        ? await uploadReturnExchangePhotos(returnRequestPhotos)
+        : [];
+      const orderNumber = returnRequestData.order.orderNumber;
+      const itemTitle = returnRequestData.item.title;
+      if (returnExchangeEnabled) {
+        const result = await submitReturnExchangeRequest({
+          orderNumber,
+          email: currentUser?.email || returnRequestData.order.customer?.email,
+          itemIndex: returnRequestData.itemIndex,
+          quantity: Number(returnRequestQuantity),
+          type: returnRequestType,
+          reason: returnRequestReason,
+          photoUrls,
+        });
+        if (result.request) {
+          setOrders((current) => current.map((order) => order.orderNumber === orderNumber
+            ? { ...order, returnExchangeRequests: [...(order.returnExchangeRequests || []), result.request] }
+            : order));
+        }
+        notify?.("Your request has been submitted for review.");
+      } else {
+        const subject = `${returnRequestType === "return" ? "Return" : "Exchange"} request for order ${orderNumber}`;
+        const body = `Hello,\n\nI would like to request a ${returnRequestType}.\nOrder: ${orderNumber}\nItem: ${itemTitle}\nQuantity: ${returnRequestQuantity}\nReason: ${returnRequestReason || "Not provided"}\n${photoUrls.length ? `Photo links:\n${photoUrls.join("\n")}\n` : ""}\nPlease let me know the next steps.`;
+        window.location.href = `mailto:healthwithherbalindia@gmail.com?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      }
+      setReturnRequestData(null);
+      setReturnRequestReason("");
+      setReturnRequestPhotos([]);
+    } catch (error) {
+      notify?.(error.message);
+    } finally {
+      setSavingReturnRequest(false);
+    }
+  };
 
   useEffect(() => {
     setActiveTab(initialTab);
@@ -103,7 +163,7 @@ export function AccountPage({
     return () => {
       active = false;
     };
-  }, [currentUser]);
+  }, [currentUser?.phone, currentUser?.email, currentUser?._id]);
 
   // Real-time synchronization for order status updates from admin
   useEffect(() => {
@@ -140,28 +200,11 @@ export function AccountPage({
     };
     window.addEventListener("storage", handleStorage);
 
-    // Periodic poll when viewing orders tab
-    let pollInterval = null;
-    if (currentUser) {
-      pollInterval = setInterval(() => {
-        fetchUserOrders({
-          phone: currentUser.phone || "",
-          email: currentUser.email || "",
-          userId: currentUser._id || "",
-        })
-          .then((data) => {
-            if (Array.isArray(data)) setOrders(data);
-          })
-          .catch(() => {});
-      }, 5000);
-    }
-
     return () => {
       bc?.close();
       window.removeEventListener("storage", handleStorage);
-      if (pollInterval) clearInterval(pollInterval);
     };
-  }, [currentUser, activeTab]);
+  }, []);
 
   // Handle saving new or updated address via modal
   const handleSaveAddress = async (formData) => {
@@ -196,7 +239,7 @@ export function AccountPage({
       if (editingAddress?._id) {
         const updated = await updateUserAddress(editingAddress._id, payload);
         setAddresses((prev) =>
-          prev.map((a) => (a._id === updated._id ? updated : a))
+          prev.map((a) => (a._id === updated._id ? updated : a)),
         );
         if (notify) notify("Address updated successfully!");
       } else {
@@ -225,6 +268,17 @@ export function AccountPage({
       if (notify) notify("Address removed.");
     } catch (err) {
       if (notify) notify(err.message || "Could not delete address.");
+    }
+  };
+
+  const confirmDeleteAddress = async () => {
+    if (!addressToDelete?._id) return;
+    setDeletingAddress(true);
+    try {
+      await handleDeleteAddress(addressToDelete._id);
+      setAddressToDelete(null);
+    } finally {
+      setDeletingAddress(false);
     }
   };
 
@@ -341,7 +395,7 @@ export function AccountPage({
             <button
               type="button"
               className="account-nav-item account-logout-item"
-              onClick={onLogout}
+              onClick={() => setShowLogoutConfirm(true)}
             >
               <span className="account-nav-icon logout-icon">
                 <LogOut size={19} />
@@ -390,7 +444,9 @@ export function AccountPage({
                       </div>
                     </div>
                     <div className="account-empty-card-content">
-                      <h3 className="account-empty-title">No Past Orders Yet</h3>
+                      <h3 className="account-empty-title">
+                        No Past Orders Yet
+                      </h3>
                       <p className="account-empty-desc">
                         Start your first order to see it here.{" "}
                         <button
@@ -409,38 +465,66 @@ export function AccountPage({
                       <div key={order._id} className="account-order-card">
                         <div className="order-card-header">
                           <div>
-                            <span className="order-num-tag">{order.orderNumber}</span>
+                            <span className="order-num-tag">
+                              {order.orderNumber}
+                            </span>
                             <span className="order-date-tag">
-                              {new Date(order.createdAt).toLocaleDateString("en-IN", {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                              })}
+                              {new Date(order.createdAt).toLocaleDateString(
+                                "en-IN",
+                                {
+                                  day: "numeric",
+                                  month: "short",
+                                  year: "numeric",
+                                },
+                              )}
                             </span>
                           </div>
-                          <span className={`order-status-pill status-${order.status || "placed"}`}>
+                          <span
+                            className={`order-status-pill status-${order.status || "placed"}`}
+                          >
                             {order.status || "Confirmed"}
                           </span>
                         </div>
 
                         <div className="order-items-snippet">
                           {(order.items || []).map((item, idx) => (
-                            <div key={idx} className="order-item-mini" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                            <div
+                              key={idx}
+                              className="order-item-mini"
+                              style={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                gap: "8px",
+                              }}
+                            >
                               <div>
                                 <span className="item-name">{item.title}</span>
                                 <span className="item-qty-price">
                                   Qty: {item.quantity} × ₹{item.unitPrice}
                                 </span>
                               </div>
-                              {(order.status || "").toLowerCase() === "delivered" && (
+                              {(order.status || "").toLowerCase() ===
+                                "delivered" && (
                                 <button
                                   type="button"
                                   className="item-review-btn"
-                                  style={{ padding: "3px 8px", fontSize: "11px", whiteSpace: "nowrap" }}
-                                  onClick={() => setReviewModalData({ item, order })}
+                                  style={{
+                                    padding: "3px 8px",
+                                    fontSize: "11px",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                  onClick={() =>
+                                    setReviewModalData({ item, order })
+                                  }
                                   title={`Review ${item.title}`}
                                 >
-                                  <Star size={11} fill="#f59e0b" color="#f59e0b" /> Review
+                                  <Star
+                                    size={11}
+                                    fill="#f59e0b"
+                                    color="#f59e0b"
+                                  />{" "}
+                                  Review
                                 </button>
                               )}
                             </div>
@@ -448,7 +532,9 @@ export function AccountPage({
                         </div>
 
                         <div className="order-card-footer">
-                          <span className="order-total-label">Total: <strong>₹{order.total}</strong></span>
+                          <span className="order-total-label">
+                            Total: <strong>₹{order.total}</strong>
+                          </span>
                           <button
                             type="button"
                             className="order-detail-btn"
@@ -464,7 +550,10 @@ export function AccountPage({
               </div>
 
               {/* SECTION: Saved Addresses Overview */}
-              <div className="account-overview-section" style={{ marginTop: "32px" }}>
+              <div
+                className="account-overview-section"
+                style={{ marginTop: "32px" }}
+              >
                 <div className="account-section-header">
                   <h2 className="account-section-title">Saved Addresses</h2>
                   {addresses.length > 0 && (
@@ -491,7 +580,9 @@ export function AccountPage({
                       </div>
                     </div>
                     <div className="account-empty-card-content">
-                      <h3 className="account-empty-title">No Address Saved Yet</h3>
+                      <h3 className="account-empty-title">
+                        No Address Saved Yet
+                      </h3>
                       <p className="account-empty-desc">
                         Tap to add and shop faster{" "}
                         <button
@@ -510,20 +601,28 @@ export function AccountPage({
                 ) : (
                   <div className="account-address-card default-addr-preview">
                     <div className="address-card-header">
-                      <span className="address-tag-pill">{addresses[0].tag || "Home"}</span>
+                      <span className="address-tag-pill">
+                        {addresses[0].tag || "Home"}
+                      </span>
                       {addresses[0].isDefault && (
                         <span className="address-default-badge">
                           <CheckCircle2 size={13} /> Default Delivery Address
                         </span>
                       )}
                     </div>
-                    <div className="address-recipient">{addresses[0].fullName}</div>
+                    <div className="address-recipient">
+                      {addresses[0].fullName}
+                    </div>
                     <div className="address-lines">
                       {addresses[0].line1}
-                      {addresses[0].line2 ? `, ${addresses[0].line2}` : ""},{" "}
-                      {addresses[0].city}, {addresses[0].state || ""} - {addresses[0].postalCode}
+                      {addresses[0].line2
+                        ? `, ${addresses[0].line2}`
+                        : ""}, {addresses[0].city}, {addresses[0].state || ""} -{" "}
+                      {addresses[0].postalCode}
                     </div>
-                    <div className="address-phone">Phone: {addresses[0].phone}</div>
+                    <div className="address-phone">
+                      Phone: {addresses[0].phone}
+                    </div>
                   </div>
                 )}
               </div>
@@ -548,7 +647,10 @@ export function AccountPage({
                   <span>Loading order history from database...</span>
                 </div>
               ) : orders.length === 0 ? (
-                <div className="account-empty-card" style={{ marginTop: "24px" }}>
+                <div
+                  className="account-empty-card"
+                  style={{ marginTop: "24px" }}
+                >
                   <div className="account-empty-icon-box">
                     <div className="mock-box-3d">
                       <Package size={38} />
@@ -557,7 +659,8 @@ export function AccountPage({
                   <div className="account-empty-card-content">
                     <h3 className="account-empty-title">No Orders Found</h3>
                     <p className="account-empty-desc">
-                      You haven’t placed any orders yet. Discover our pure Ayurvedic remedies today.
+                      You haven’t placed any orders yet. Discover our pure
+                      Ayurvedic remedies today.
                     </p>
                     <button
                       type="button"
@@ -572,35 +675,51 @@ export function AccountPage({
               ) : (
                 <div className="account-orders-full-list">
                   {orders.map((order) => (
-                    <div key={order._id} className="account-order-card full-order-card">
+                    <div
+                      key={order._id}
+                      className="account-order-card full-order-card"
+                    >
                       <div className="order-card-header">
                         <div className="order-meta-info">
-                          <span className="order-num-tag">{order.orderNumber}</span>
+                          <span className="order-num-tag">
+                            {order.orderNumber}
+                          </span>
                           <span className="order-date-tag">
                             <Calendar size={13} />
-                            {new Date(order.createdAt).toLocaleDateString("en-IN", {
-                              day: "numeric",
-                              month: "short",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {new Date(order.createdAt).toLocaleDateString(
+                              "en-IN",
+                              {
+                                day: "numeric",
+                                month: "short",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              },
+                            )}
                           </span>
                         </div>
-                        <span className={`order-status-pill status-${order.status || "placed"}`}>
-                          {order.status ? order.status.toUpperCase() : "CONFIRMED"}
+                        <span
+                          className={`order-status-pill status-${order.status || "placed"}`}
+                        >
+                          {order.status
+                            ? order.status.toUpperCase()
+                            : "CONFIRMED"}
                         </span>
                       </div>
 
                       {(order.status || "").toLowerCase() === "delivered" && (
-                        <div className="delivered-review-callout" style={{ margin: "10px 0 14px" }}>
+                        <div
+                          className="delivered-review-callout"
+                          style={{ margin: "10px 0 14px" }}
+                        >
                           <div className="callout-icon-box">
                             <Sparkles size={16} color="#15803d" />
                           </div>
                           <div className="callout-text">
                             <strong>Order Delivered!</strong>
                             <p>
-                              Share your authentic experience with the herbal products below. Your feedback helps our community!
+                              Share your authentic experience with the herbal
+                              products below. Your feedback helps our community!
                             </p>
                           </div>
                         </div>
@@ -615,23 +734,75 @@ export function AccountPage({
                             </div>
                             <div className="order-item-info">
                               <div className="item-title">{item.title}</div>
-                              <div className="item-brand">{item.brand || "Health with Herbal"}</div>
-                              <div className="item-qty">Qty: {item.quantity}</div>
-                            </div>
-                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "6px" }}>
-                              <div className="order-item-price">
-                                ₹{item.lineTotal || item.unitPrice * item.quantity}
+                              <div className="item-brand">
+                                {item.brand || "Health with Herbal"}
                               </div>
-                              {(order.status || "").toLowerCase() === "delivered" && (
-                                <button
-                                  type="button"
-                                  className="item-review-btn"
-                                  onClick={() => setReviewModalData({ item, order })}
-                                  title={`Review ${item.title}`}
-                                >
-                                  <Star size={12} fill="#f59e0b" color="#f59e0b" />
-                                  <span>Review Product</span>
-                                </button>
+                              <div className="item-qty">
+                                Qty: {item.quantity}
+                              </div>
+                              {(order.returnExchangeRequests || [])
+                                .filter((request) => returnRequestMatchesItem(request, item, idx))
+                                .map((request) => (
+                                  <div key={request._id} className={`customer-return-status customer-return-status-${request.status || "pending"}`}>
+                                    <RotateCcw size={13} />
+                                    <span>{request.type === "exchange" ? "Exchange" : "Return"} request</span>
+                                    <strong>{(request.status || "pending").charAt(0).toUpperCase() + (request.status || "pending").slice(1)}</strong>
+                                  </div>
+                                ))}
+                            </div>
+                            <div
+                              style={{
+                                display: "flex",
+                                flexDirection: "column",
+                                alignItems: "flex-end",
+                                gap: "6px",
+                              }}
+                            >
+                              <div className="order-item-price">
+                                ₹
+                                {item.lineTotal ||
+                                  item.unitPrice * item.quantity}
+                              </div>
+                              {(order.status || "").toLowerCase() ===
+                                "delivered" && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="item-review-btn"
+                                    onClick={() =>
+                                      setReviewModalData({ item, order })
+                                    }
+                                    title={`Review ${item.title}`}
+                                  >
+                                    <Star
+                                      size={12}
+                                      fill="#f59e0b"
+                                      color="#f59e0b"
+                                    />
+                                    <span>Review Product</span>
+                                  </button>
+                                  {(order.returnExchangeRequests || []).some((request) => returnRequestMatchesItem(request, item, idx)) ? (
+                                    <span className="item-review-btn return-exchange-request-btn is-submitted" aria-label="Return or exchange request already submitted">
+                                      <CheckCircle2 size={13} />
+                                      <span>Request submitted</span>
+                                    </span>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      className="item-review-btn return-exchange-request-btn"
+                                      onClick={() => {
+                                        setReturnRequestData({ item, order, itemIndex: idx });
+                                        setReturnRequestQuantity(1);
+                                        setReturnRequestType("return");
+                                        setReturnRequestReason("");
+                                        setReturnRequestPhotos([]);
+                                      }}
+                                    >
+                                      <RotateCcw size={13} />
+                                      <span>Request Return / Exchange</span>
+                                    </button>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>
@@ -646,17 +817,26 @@ export function AccountPage({
                         </div>
                         <div className="summary-row">
                           <span>Shipping:</span>
-                          <span>{order.shipping === 0 ? "FREE" : `₹${order.shipping}`}</span>
+                          <span>
+                            {order.shipping === 0
+                              ? "FREE"
+                              : `₹${order.shipping}`}
+                          </span>
                         </div>
                         {order.discount > 0 && (
                           <div className="summary-row discount">
-                            <span>Discount {order.couponCode ? `(${order.couponCode})` : ""}:</span>
+                            <span>
+                              Discount{" "}
+                              {order.couponCode ? `(${order.couponCode})` : ""}:
+                            </span>
                             <span>-₹{order.discount}</span>
                           </div>
                         )}
                         <div className="summary-row grand-total">
                           <span>Total Paid:</span>
-                          <span className="total-highlight">₹{order.total}</span>
+                          <span className="total-highlight">
+                            ₹{order.total}
+                          </span>
                         </div>
                       </div>
 
@@ -666,8 +846,10 @@ export function AccountPage({
                           <div className="order-delivery-snapshot">
                             <strong>Delivery Address:</strong>
                             <p>
-                              {order.shippingAddress.firstName} {order.shippingAddress.lastName} <br />
-                              {order.shippingAddress.street}, {order.shippingAddress.city} -{" "}
+                              {order.shippingAddress.firstName}{" "}
+                              {order.shippingAddress.lastName} <br />
+                              {order.shippingAddress.street},{" "}
+                              {order.shippingAddress.city} -{" "}
                               {order.shippingAddress.postalCode}
                             </p>
                           </div>
@@ -676,13 +858,19 @@ export function AccountPage({
                         {order.orderNote && (
                           <div className="order-delivery-note">
                             <FileText size={15} />
-                            <span><strong>Note:</strong> {order.orderNote}</span>
+                            <span>
+                              <strong>Note:</strong> {order.orderNote}
+                            </span>
                           </div>
                         )}
 
                         <div className="order-payment-badge">
                           <CreditCard size={15} />
-                          <span>{order.paymentMethod === "cash_on_delivery" ? "Cash on Delivery" : "Online Payment"}</span>
+                          <span>
+                            {order.paymentMethod === "cash_on_delivery"
+                              ? "Cash on Delivery"
+                              : "Online Payment"}
+                          </span>
                         </div>
 
                         <button
@@ -726,7 +914,10 @@ export function AccountPage({
                   <span>Loading saved addresses from database...</span>
                 </div>
               ) : addresses.length === 0 ? (
-                <div className="account-empty-card" style={{ marginTop: "24px" }}>
+                <div
+                  className="account-empty-card"
+                  style={{ marginTop: "24px" }}
+                >
                   <div className="account-empty-icon-box">
                     <div className="mock-pin-3d">
                       <MapPin size={38} />
@@ -755,7 +946,9 @@ export function AccountPage({
                       className={`account-address-card ${addr.isDefault ? "is-default" : ""}`}
                     >
                       <div className="address-card-header">
-                        <span className="address-tag-pill">{addr.tag || "Home"}</span>
+                        <span className="address-tag-pill">
+                          {addr.tag || "Home"}
+                        </span>
                         {addr.isDefault && (
                           <span className="address-default-badge">
                             <CheckCircle2 size={13} /> Default
@@ -767,7 +960,8 @@ export function AccountPage({
                       <div className="address-lines">
                         {addr.line1}
                         {addr.line2 ? `, ${addr.line2}` : ""}, <br />
-                        {addr.city}, {addr.state ? `${addr.state} - ` : ""}{addr.postalCode}
+                        {addr.city}, {addr.state ? `${addr.state} - ` : ""}
+                        {addr.postalCode}
                         <br />
                         {addr.country || "India"}
                       </div>
@@ -785,7 +979,7 @@ export function AccountPage({
                         <button
                           type="button"
                           className="address-delete-btn"
-                          onClick={() => handleDeleteAddress(addr._id)}
+                          onClick={() => setAddressToDelete(addr)}
                           title="Delete address"
                         >
                           <Trash2 size={15} /> Delete
@@ -833,6 +1027,91 @@ export function AccountPage({
         onSubmitted={() => {
           notify?.("Review submitted! Thank you for sharing your feedback.");
         }}
+      />
+      {returnRequestData && (
+        <div
+          className="return-request-overlay"
+          onClick={(event) => {
+            if (event.target === event.currentTarget && !savingReturnRequest)
+              setReturnRequestData(null);
+          }}
+        >
+          <form className="return-request-modal" onSubmit={sendReturnRequest}>
+            <div className="return-request-heading">
+              <div>
+                <span>ORDER {returnRequestData.order.orderNumber}</span>
+                <h2>Return or exchange</h2>
+              </div>
+              <button type="button" onClick={() => setReturnRequestData(null)} aria-label="Close request form">×</button>
+            </div>
+            <p className="return-request-product">
+              {returnExchangeEnabled
+                ? "Submit your request for review by our care team."
+                : "Your email app will open with your request. Photo links will be included."}
+            </p>
+            <p className="return-request-product">
+              {returnRequestData.item.title} · Ordered quantity {returnRequestData.item.quantity}
+            </p>
+            <label>Request type
+              <select value={returnRequestType} onChange={(event) => setReturnRequestType(event.target.value)}>
+                <option value="return">Return</option><option value="exchange">Exchange</option>
+              </select>
+            </label>
+            <label>Quantity
+              <select value={returnRequestQuantity} onChange={(event) => setReturnRequestQuantity(event.target.value)}>
+                {Array.from({ length: returnRequestData.item.quantity }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
+              </select>
+            </label>
+            <label>Reason
+              <textarea required minLength={5} maxLength={1000} rows={4} value={returnRequestReason} onChange={(event) => setReturnRequestReason(event.target.value)} placeholder="Tell us why you are requesting a return or exchange" />
+            </label>
+            <label className="return-request-photo-field">Photos (optional, up to 4)
+              <input type="file" accept="image/*" multiple disabled={savingReturnRequest} onChange={(event) => {
+                const nextFiles = Array.from(event.target.files || []);
+                if (nextFiles.some((file) => file.size > 5 * 1024 * 1024)) {
+                  notify?.("Each photo must be 5 MB or smaller.");
+                  event.target.value = "";
+                  return;
+                }
+                setReturnRequestPhotos((current) => [...current, ...nextFiles].slice(0, 4));
+                event.target.value = "";
+              }} />
+              <small>Add photos of the item or issue. JPG, PNG, or WebP; 5 MB max each.</small>
+            </label>
+            {returnRequestPhotos.length > 0 && <div className="return-request-photo-list">{returnRequestPhotos.map((photo, index) => (
+              <div key={`${photo.name}-${photo.lastModified}`}><span>{photo.name}</span><button type="button" disabled={savingReturnRequest} onClick={() => setReturnRequestPhotos((current) => current.filter((_, photoIndex) => photoIndex !== index))} aria-label={`Remove ${photo.name}`}>Remove</button></div>
+            ))}</div>}
+            <footer>
+              <button type="button" onClick={() => setReturnRequestData(null)} disabled={savingReturnRequest}>Cancel</button>
+              <button type="submit" disabled={savingReturnRequest}>{savingReturnRequest ? "Uploading…" : returnExchangeEnabled ? "Submit request" : "Continue to email"}</button>
+            </footer>
+          </form>
+        </div>
+      )}
+      {/* Logout Confirmation Modal */}
+      <ConfirmModal
+        isOpen={showLogoutConfirm}
+        onClose={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          setShowLogoutConfirm(false);
+          onLogout?.();
+        }}
+        title="Log Out?"
+        message="Are you sure you want to log out of your account?"
+        confirmLabel="Log Out"
+        variant="warning"
+      />
+
+      {/* Delete Address Confirmation Modal */}
+      <ConfirmModal
+        isOpen={Boolean(addressToDelete)}
+        onClose={() => setAddressToDelete(null)}
+        onConfirm={confirmDeleteAddress}
+        loading={deletingAddress}
+        title="Delete Address?"
+        message={`Are you sure you want to remove the saved address for ${addressToDelete?.fullName || "this recipient"}? This action cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
       />
     </div>
   );

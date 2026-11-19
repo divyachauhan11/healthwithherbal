@@ -1,15 +1,26 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowRight,
   Calendar,
   Check,
   Clock3,
+  Eye,
+  Heart,
+  MessageCircle,
   Share2,
+  Send,
   Sparkles,
 } from "lucide-react";
-import { AppButton } from "../../../components/global/primitives";
-import { LOGO_URL } from "../../../lib/store-data";
+import { AppButton } from "@/components/pages/shared/primitives";
+import {
+  fetchBlogCommunity,
+  getBlogVisitorId,
+  recordBlogView,
+  setBlogLike,
+  submitBlogComment,
+} from "@/lib/api";
+import { LOGO_URL } from "@/lib/store-data";
 
 function ArticleMarkdown({ content = "" }) {
   const inline = (text) => text.split(/(!\[[^\]]*\]\([^)]+\)|\[[^\]]+\]\([^)]*\)|\[[^\]]+\]\{(?:size|color)=[^}]+\}|\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|`[^`]+`)/g).map((part, index) => {
@@ -69,6 +80,13 @@ export function BlogPage({ openCatalog, blogs: blogsProp = [] }) {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [activeArticle, setActiveArticle] = useState(null);
   const [shareCopied, setShareCopied] = useState(false);
+  const [community, setCommunity] = useState({ likes: 0, comments: 0, views: 0, liked: false, allowComments: true, items: [] });
+  const [cardMetrics, setCardMetrics] = useState({});
+  const [communityBusy, setCommunityBusy] = useState(false);
+  const [commentForm, setCommentForm] = useState({ authorName: "", authorEmail: "", content: "" });
+  const [commentNotice, setCommentNotice] = useState("");
+  const [commentNoticeIsError, setCommentNoticeIsError] = useState(false);
+  const viewedArticles = useRef(new Set());
 
   const allPosts = useMemo(() => {
     if (!Array.isArray(blogsProp) || blogsProp.length === 0) {
@@ -94,6 +112,9 @@ export function BlogPage({ openCatalog, blogs: blogsProp = [] }) {
           : "Recent"),
       author: b.author || "Health With Herbal",
       image: b.coverImage || b.image || "",
+      likesCount: Number(b.likesCount) || 0,
+      viewsCount: Number(b.viewsCount) || 0,
+      commentsCount: Number(b.commentsCount) || 0,
     }));
   }, [blogsProp]);
 
@@ -127,6 +148,48 @@ export function BlogPage({ openCatalog, blogs: blogsProp = [] }) {
     return () => window.removeEventListener("popstate", syncArticleFromUrl);
   }, [allPosts]);
 
+  useEffect(() => {
+    if (!activeArticle?.slug) return;
+    let active = true;
+    const sessionId = getBlogVisitorId();
+    setCommunityBusy(true);
+    setCommentNotice("");
+    setCommentNoticeIsError(false);
+    setCommentForm((form) => ({ ...form, content: "" }));
+    const loadCommunity = async () => {
+      try {
+        if (!viewedArticles.current.has(activeArticle.slug)) {
+          viewedArticles.current.add(activeArticle.slug);
+          try {
+            await recordBlogView(activeArticle.slug, sessionId);
+          } catch (error) {
+            if (active) {
+              setCommentNotice(error.message || "Could not record this article view.");
+              setCommentNoticeIsError(true);
+            }
+          }
+        }
+        const data = await fetchBlogCommunity(activeArticle.slug, sessionId);
+        if (active) {
+          setCommunity({ ...data, items: data.items || [] });
+          setCardMetrics((current) => ({
+            ...current,
+            [activeArticle.slug]: { likes: data.likes, views: data.views, comments: data.comments },
+          }));
+        }
+      } catch (error) {
+        if (active) {
+          setCommentNotice(error.message || "Could not load article activity.");
+          setCommentNoticeIsError(true);
+        }
+      } finally {
+        if (active) setCommunityBusy(false);
+      }
+    };
+    loadCommunity();
+    return () => { active = false; };
+  }, [activeArticle?.slug]);
+
   const openArticle = (post) => {
     setActiveArticle(post);
     if (post.slug) {
@@ -148,11 +211,59 @@ export function BlogPage({ openCatalog, blogs: blogsProp = [] }) {
       .slice(0, 3);
     const shareArticle = async () => {
       try {
+        if (navigator.share) {
+          await navigator.share({ title: activeArticle.title, url: window.location.href });
+          return;
+        }
         await navigator.clipboard.writeText(window.location.href);
         setShareCopied(true);
         window.setTimeout(() => setShareCopied(false), 1800);
       } catch {
-        setShareCopied(false);
+        try {
+          await navigator.clipboard.writeText(window.location.href);
+          setShareCopied(true);
+          window.setTimeout(() => setShareCopied(false), 1800);
+        } catch {
+          setCommentNotice("Sharing is unavailable in this browser.");
+          setCommentNoticeIsError(true);
+        }
+      }
+    };
+
+    const toggleLike = async () => {
+      setCommunityBusy(true);
+      try {
+        const result = await setBlogLike(activeArticle.slug, getBlogVisitorId(), !community.liked);
+        setCommunity((current) => ({ ...current, liked: result.liked, likes: result.likes }));
+        setCardMetrics((current) => ({
+          ...current,
+          [activeArticle.slug]: {
+            ...current[activeArticle.slug],
+            likes: result.likes,
+          },
+        }));
+      } catch (error) {
+        setCommentNotice(error.message || "Could not update your like.");
+        setCommentNoticeIsError(true);
+      } finally {
+        setCommunityBusy(false);
+      }
+    };
+
+    const sendComment = async (event) => {
+      event.preventDefault();
+      setCommunityBusy(true);
+      setCommentNotice("");
+      setCommentNoticeIsError(false);
+      try {
+        const result = await submitBlogComment(activeArticle.slug, commentForm);
+        setCommentForm((form) => ({ ...form, content: "" }));
+        setCommentNotice(result.message || "Your comment is awaiting approval.");
+      } catch (error) {
+        setCommentNotice(error.message || "Could not submit your comment.");
+        setCommentNoticeIsError(true);
+      } finally {
+        setCommunityBusy(false);
       }
     };
 
@@ -199,6 +310,17 @@ export function BlogPage({ openCatalog, blogs: blogsProp = [] }) {
               </div>
             </header>
 
+            <div className="article-community-bar" aria-label="Article activity">
+              <button type="button" className={community.liked ? "liked" : ""} onClick={toggleLike} disabled={communityBusy}>
+                <Heart size={18} fill={community.liked ? "currentColor" : "none"} />
+                {community.liked ? "Liked" : "Like"} <span>{community.likes}</span>
+              </button>
+              <button type="button" onClick={() => document.getElementById("article-comments")?.scrollIntoView({ behavior: "smooth" })}>
+                <MessageCircle size={18} /> Comment <span>{community.comments}</span>
+              </button>
+              <span className="article-view-count"><Eye size={17} /> {community.views} views</span>
+            </div>
+
             {activeArticle.image && (
               <div className="article-page-image">
                 <img src={activeArticle.image} alt={activeArticle.title} />
@@ -208,6 +330,37 @@ export function BlogPage({ openCatalog, blogs: blogsProp = [] }) {
             <div className="article-page-body">
               <ArticleMarkdown content={activeArticle.content} />
             </div>
+
+            <section className="article-comments" id="article-comments" aria-labelledby="article-comments-title">
+              <div className="article-comments-heading">
+                <div>
+                  <span>Community</span>
+                  <h2 id="article-comments-title">Comments ({community.comments})</h2>
+                </div>
+                <p>Comments appear here after they are approved.</p>
+              </div>
+              {community.allowComments ? (
+                <form className="article-comment-form" onSubmit={sendComment}>
+                  <div className="article-comment-fields">
+                    <label>Name<input required minLength={2} maxLength={100} value={commentForm.authorName} onChange={(event) => setCommentForm((form) => ({ ...form, authorName: event.target.value }))} /></label>
+                    <label>Email (optional)<input type="email" maxLength={254} value={commentForm.authorEmail} onChange={(event) => setCommentForm((form) => ({ ...form, authorEmail: event.target.value }))} /></label>
+                  </div>
+                  <label className="article-comment-message">Your comment<textarea required minLength={3} maxLength={2000} rows={4} value={commentForm.content} onChange={(event) => setCommentForm((form) => ({ ...form, content: event.target.value }))} /></label>
+                  {commentNotice && <p className={`article-comment-notice ${commentNoticeIsError ? "error" : ""}`} role="status">{commentNotice}</p>}
+                  <button className="article-comment-submit" type="submit" disabled={communityBusy}><Send size={15} /> Submit comment</button>
+                </form>
+              ) : <p className="article-no-comments">Comments are closed for this article.</p>}
+              <div className="article-comment-list">
+                {community.items.map((comment) => (
+                  <article className="article-comment-card" key={comment._id}>
+                    <strong>{comment.authorName}</strong>
+                    <time>{new Date(comment.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</time>
+                    <p>{comment.content}</p>
+                  </article>
+                ))}
+                {!community.items.length && <p className="article-no-comments">No approved comments yet. Start the conversation.</p>}
+              </div>
+            </section>
           </article>
 
           {relatedPosts.length > 0 && (
@@ -335,6 +488,12 @@ export function BlogPage({ openCatalog, blogs: blogsProp = [] }) {
 
                   <h2 onClick={() => openArticle(post)}>{post.title}</h2>
                   <p>{post.excerpt}</p>
+
+                  <div className="blog-card-engagement" aria-label="Article activity">
+                    <span title="Likes"><Heart size={14} /> {cardMetrics[post.slug]?.likes ?? post.likesCount}</span>
+                    <span title="Views"><Eye size={14} /> {cardMetrics[post.slug]?.views ?? post.viewsCount}</span>
+                    <span title="Approved comments"><MessageCircle size={14} /> {cardMetrics[post.slug]?.comments ?? post.commentsCount}</span>
+                  </div>
 
                   <div className="blog-card-footer">
                     <small>By {post.author}</small>
