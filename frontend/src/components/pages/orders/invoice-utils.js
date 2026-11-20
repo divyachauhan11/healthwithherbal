@@ -11,12 +11,15 @@ export const money = (value) => `₹${(Number(value) || 0).toFixed(2)}`;
 export const invoiceDate = dateLabelLong;
 
 /**
- * Invoice number: "HWH-" + the order number, or the last 8 characters of the order id.
+ * Invoice number: the order number (already "HWH-..."), or "HWH-" plus the
+ * last 8 characters of the order id.
  * @param {object} order
  * @returns {string}
  */
-export const getInvoiceNumber = (order) =>
-  `HWH-${order.orderNumber || String(order._id).slice(-8).toUpperCase()}`;
+export const getInvoiceNumber = (order) => {
+  const reference = order.orderNumber || String(order._id).slice(-8).toUpperCase();
+  return reference.startsWith("HWH-") ? reference : `HWH-${reference}`;
+};
 
 /**
  * Full name from the present `firstName` / `lastName` parts ("" when none).
