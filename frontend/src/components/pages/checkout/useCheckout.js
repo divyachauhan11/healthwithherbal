@@ -11,6 +11,7 @@ import {
   checkoutMrpTotal,
   checkoutSubtotal,
   hasDeliveryAddress,
+  shippingOptionForDestination,
 } from "./checkout-utils";
 import { useCheckoutAddresses } from "./useCheckoutAddresses";
 import { useCheckoutCoupon } from "./useCheckoutCoupon";
@@ -101,7 +102,12 @@ export function useCheckout({ cart, products, currentUser, shippingOption, onCom
   const { selectedAddressId, formData } = addresses;
   const { appliedCoupon, discountAmount } = coupon;
 
-  const shippingFee = shippingCostFor(shippingOption, appliedCoupon);
+  // The option chosen in the bag may not ship to the selected address.
+  const deliveryShippingOption = useMemo(
+    () => shippingOptionForDestination(shippingOption, formData.country),
+    [shippingOption, formData.country],
+  );
+  const shippingFee = shippingCostFor(deliveryShippingOption, appliedCoupon);
   const finalTotal = Math.max(0, rawSubtotal - discountAmount + shippingFee);
 
   const continueToPayment = () => {
@@ -132,7 +138,7 @@ export function useCheckout({ cart, products, currentUser, shippingOption, onCom
         currentUser,
         lineItems,
         appliedCoupon,
-        shippingOption,
+        shippingOption: deliveryShippingOption,
       });
       if (selectedPaymentMethod === "payu") {
         const checkout = await createPayuCheckout(orderPayload);
@@ -189,6 +195,7 @@ export function useCheckout({ cart, products, currentUser, shippingOption, onCom
     submitting,
     lineItems,
     totals: { totalMrp, mrpSavings, discountAmount, shippingFee, finalTotal },
+    shippingOption: deliveryShippingOption,
     coupon,
     addresses,
     payment: { method: paymentMethod, payuAvailable, selectCashOnDelivery, payWithPayu },

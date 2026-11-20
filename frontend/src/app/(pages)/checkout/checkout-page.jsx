@@ -48,6 +48,7 @@ export function CheckoutPage({
     placeOrder,
     submitDisabled,
     submitStep,
+    shippingOption: deliveryShippingOption,
   } = useCheckout({ cart, products, currentUser, shippingOption, onComplete });
 
   return (
@@ -92,7 +93,7 @@ export function CheckoutPage({
           coupons={coupons}
           coupon={coupon}
           totals={totals}
-          shippingLabel={shippingOption.name}
+          shippingLabel={deliveryShippingOption.name}
           error={error}
           onOpenContent={openContent}
           step={step}

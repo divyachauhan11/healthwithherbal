@@ -3,6 +3,8 @@
  * mapping and the order payload.
  */
 
+import { defaultShippingOptionFor } from "@/components/pages/cart/cart-utils";
+
 /** DOM id of the checkout form that places the order. */
 export const CHECKOUT_FORM_ID = "checkout-details-form";
 
@@ -313,3 +315,23 @@ export const buildOrderPayload = ({ formData, currentUser, lineItems, appliedCou
   couponCode: appliedCoupon?.code,
   shippingMethod: shippingOption.method || "standard",
 });
+
+/**
+ * Shipping option to charge for a delivery country: the shopper's chosen
+ * option when it can ship there, otherwise that country's default. The API
+ * rejects domestic methods for addresses abroad and international shipping
+ * within India, and checkout has no shipping selector of its own.
+ * @param {{method?: string, name?: string, price?: number}} shippingOption Option chosen in the bag.
+ * @param {string} [country] Delivery country.
+ * @returns {{method?: string, name?: string, price?: number}}
+ */
+export const shippingOptionForDestination = (shippingOption, country) => {
+  const destination = String(country || "").trim();
+  if (!destination) return shippingOption;
+  const isDomestic = destination.toLowerCase() === "india";
+  const method = shippingOption?.method || "standard";
+  const fitsDestination = isDomestic
+    ? method !== "international_express"
+    : method === "international_express";
+  return fitsDestination ? shippingOption : defaultShippingOptionFor(isDomestic ? "India" : destination);
+};
