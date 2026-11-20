@@ -505,6 +505,39 @@ it (they change API behaviour or need a product decision):
 17. The Settings page dispatches a `hwh-return-exchange-setting` window event
     that nothing listens to.
 
+Pre-existing bugs confirmed during the refactor's verification that need a
+product or API decision (each was reproduced on the original code):
+
+18. **Customers with a one-word name cannot place an order**: checkout sends an
+    empty `lastName`, which the API and the `Order` schema reject.
+19. The **coupon and order note entered in the bag drawer are not carried into
+    checkout**, and the order note is never sent with the order.
+20. A **guest who closes the sign-in dialog on `/checkout`** is left on an empty
+    page (checkout hides the header and footer).
+21. **Parent-category links** (home "Wellness, curated by nature" cards, footer)
+    show "No remedies found": the shop filter matches products' (child)
+    category name exactly.
+22. An **unknown `/product/<slug>`** shows the first product instead of a
+    not-found state; the **bag count** still counts products that were removed
+    from the catalogue; cart **recommendations** can suggest out-of-stock
+    products and say "Item added" even when the add was refused; repeating the
+    same header search after editing the shop's search box does not reapply it.
+23. **Admin coupons**: clearing an expiry date or usage limit is not saved (the
+    form omits cleared fields and the API update is partial).
+24. **Admin counts go stale**: the sidebar Orders badge and page stat cards are
+    not refreshed after status changes or product edits made on other pages.
+25. The **category form's "Description (optional)"** is not stored by the API.
+26. An **employee opening a page without access** briefly sees an
+    access-denied toast before being redirected.
+27. **PayU return page**: a "pending" result is evaluated once, so it does not
+    switch to "paid" on screen when polling later sees the payment; and going
+    Back to the success URL after starting a new cart clears that cart again.
+28. **Cross-tab status updates for a just-placed order**: the admin broadcast
+    uses the order `_id`, which the create-order response does not include, so
+    the confirmation page only catches up through SSE/polling (seconds later).
+29. The footer's **Order History** link does not switch tabs when the account
+    page is already open; the **invoice** shows the raw payment method ("payu").
+
 ## 9. How-to recipes
 
 **Call a new API endpoint from the storefront**
