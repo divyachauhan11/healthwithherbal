@@ -75,6 +75,16 @@ export function useCheckout({ cart, products, currentUser, shippingOption, onCom
     return () => { active = false; };
   }, []);
 
+  // Coming back from PayU with the browser's Back button can restore this page
+  // from the back/forward cache with the place-order buttons still disabled.
+  useEffect(() => {
+    const handlePageShow = (event) => {
+      if (event.persisted) setSubmitting(false);
+    };
+    window.addEventListener("pageshow", handlePageShow);
+    return () => window.removeEventListener("pageshow", handlePageShow);
+  }, []);
+
   const lineItems = useMemo(
     () => buildCheckoutLineItems(cart, products),
     [cart, products],
@@ -111,6 +121,7 @@ export function useCheckout({ cart, products, currentUser, shippingOption, onCom
     }
     setSubmitting(true);
     setError("");
+    let leavingForPayu = false;
 
     try {
       const orderPayload = buildOrderPayload({
@@ -125,6 +136,7 @@ export function useCheckout({ cart, products, currentUser, shippingOption, onCom
         try {
           saveLastOrder(checkout.order);
         } catch {}
+        leavingForPayu = true;
         submitPayuForm(checkout.payment);
         return;
       }
@@ -137,7 +149,9 @@ export function useCheckout({ cart, products, currentUser, shippingOption, onCom
           : "Could not place your order.",
       );
     } finally {
-      setSubmitting(false);
+      // While the browser is leaving for PayU, keep the buttons disabled so a
+      // second click cannot create a duplicate order.
+      if (!leavingForPayu) setSubmitting(false);
     }
   };
 
