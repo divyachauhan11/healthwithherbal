@@ -20,9 +20,10 @@ async function fetchExternal(
     return await fetch(url, { ...options, signal: options.signal || AbortSignal.timeout(timeoutMs) });
   } catch (cause) {
     const timedOut = cause?.name === "TimeoutError";
+    const seconds = Math.max(1, Math.round(timeoutMs / 1000));
     const error = new Error(
       timedOut
-        ? `${serviceName} did not respond within ${Math.max(1, Math.round(timeoutMs / 1000))} seconds.`
+        ? `${serviceName} did not respond within ${seconds} second${seconds === 1 ? "" : "s"}.`
         : `${serviceName} could not be reached.`,
       { cause },
     );
@@ -33,13 +34,28 @@ async function fetchExternal(
 
 /**
  * Read a fetch response as JSON and preserve useful context when a provider
- * returns malformed content.
+ * returns malformed content. A body that cannot be read (for example because
+ * the {@link fetchExternal} timeout fires mid-response) is reported with the
+ * service name instead of a bare abort error.
  * @param {Response} response Fetch response.
  * @param {string} serviceName Name used in the resulting error message.
  * @returns {Promise<unknown|null>} Parsed JSON, or null for an empty body.
  */
 async function readJsonResponse(response, serviceName = "External service") {
-  const responseText = await response.text();
+  let responseText;
+  try {
+    responseText = await response.text();
+  } catch (cause) {
+    const timedOut = cause?.name === "TimeoutError" || cause?.name === "AbortError";
+    const error = new Error(
+      timedOut
+        ? `${serviceName} took too long to send its response.`
+        : `${serviceName} response could not be read.`,
+      { cause },
+    );
+    error.status = timedOut ? 504 : 502;
+    throw error;
+  }
   if (!responseText) return null;
 
   try {
