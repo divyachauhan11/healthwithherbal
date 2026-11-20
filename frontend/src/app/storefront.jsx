@@ -20,8 +20,10 @@ import {
  * header, the active page, the footer, the sign-in modal, the cart drawer and
  * the toast.
  *
- * Keep the hook order: it is the order their effects run in on every render
- * (session restore -> wishlist -> store data -> routing -> cart restore -> cart sync).
+ * Keep the hook order: effects run in hook order, so the session is restored
+ * before the wishlist loads, `/store/init` is requested before the backend
+ * cart, the route is read from the URL before the cart is restored, and the
+ * cart is restored before it is synced.
  */
 export default function App() {
   const { toast, notify } = useToast();
