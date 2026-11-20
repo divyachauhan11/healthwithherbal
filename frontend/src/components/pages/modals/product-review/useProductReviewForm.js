@@ -73,6 +73,11 @@ export function useProductReviewForm({ product, order, currentUser, onClose, onS
     if (!busy) {
       setError("");
       setSuccess(false);
+      // The dialog stays mounted between products: start the next review fresh.
+      setRating(5);
+      setHoverRating(0);
+      setTitle("");
+      setComment("");
       onClose();
     }
   };
