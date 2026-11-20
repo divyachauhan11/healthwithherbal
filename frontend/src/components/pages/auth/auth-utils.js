@@ -8,6 +8,20 @@ export const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const digitsOnly = (value) => value.replace(/\D/g, "");
 
 /**
+ * Ten-digit mobile number from the signup field's input. More than ten digits
+ * means a country code ("91") or trunk prefix ("0") was entered or pasted,
+ * so that prefix is dropped instead of cutting off the end of the number.
+ * @param {string} value Raw input value.
+ * @returns {string} Up to ten digits.
+ */
+export const normalizeMobileNumber = (value) => {
+  let digits = digitsOnly(value);
+  if (digits.length > 10 && digits.startsWith("91")) digits = digits.slice(2);
+  else if (digits.length > 10 && digits.startsWith("0")) digits = digits.slice(1);
+  return digits.slice(0, 10);
+};
+
+/**
  * Validate the login identifier (email, or a mobile number with at least 10 digits).
  * @param {string} cleanInput Trimmed identifier.
  * @returns {string} Error message, or "" when valid.
