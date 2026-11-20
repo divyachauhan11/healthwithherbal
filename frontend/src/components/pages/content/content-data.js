@@ -264,6 +264,19 @@ export const CONTENT_PAGES = {
   },
 };
 
+/**
+ * Labels the storefront routes to (`/pages/<slug>`) that have no copy of
+ * their own and render another page instead. Terms & Conditions has never
+ * had copy; the Disclaimer holds the store's terms for using the site.
+ * An entry added to `CONTENT_PAGES` takes precedence over its alias.
+ */
+export const CONTENT_PAGE_ALIASES = {
+  "Terms & Conditions": "Disclaimer",
+};
+
+/** Page shown for unknown labels (the storefront's default content page). */
+export const DEFAULT_CONTENT_PAGE = "Our Story";
+
 /** Hero modifier class appended to `content-hero` for each page. */
 export const CONTENT_HERO_MODIFIERS = {
   Disclaimer: " disclaimer-hero",

@@ -1,6 +1,9 @@
 import {
   CONTACT_EMAIL,
   CONTENT_HERO_MODIFIERS,
+  CONTENT_PAGE_ALIASES,
+  CONTENT_PAGES,
+  DEFAULT_CONTENT_PAGE,
   POLICY_BREADCRUMB_PAGES,
   POLICY_PAGES,
   POLICY_REMINDERS,
@@ -10,6 +13,18 @@ import {
 export const CONTACT_MAILTO = `mailto:${CONTACT_EMAIL}`;
 
 const hasOwn = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
+
+/**
+ * Resolve a content page label to a page that has copy: the label itself,
+ * its alias, or the default content page for unknown labels (for example a
+ * mistyped `/pages/<slug>`).
+ * @param {string} page Requested content page label.
+ * @returns {string} A key of `CONTENT_PAGES`.
+ */
+export function resolveContentPage(page) {
+  if (hasOwn(CONTENT_PAGES, page)) return page;
+  return hasOwn(CONTENT_PAGE_ALIASES, page) ? CONTENT_PAGE_ALIASES[page] : DEFAULT_CONTENT_PAGE;
+}
 
 /**
  * Describe which blocks a content page renders.

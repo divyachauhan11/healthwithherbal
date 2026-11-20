@@ -13,16 +13,21 @@ import {
   useContactForm,
 } from "@/components/pages/content";
 import { CONTENT_PAGES } from "@/components/pages/content/content-data";
-import { getContentPageLayout } from "@/components/pages/content/content-utils";
+import {
+  getContentPageLayout,
+  resolveContentPage,
+} from "@/components/pages/content/content-utils";
 
 /**
  * Storefront content page: Our Story, Contact Us and the store policies.
  * (The storefront also passes `openCatalog`; this page does not use it.)
  * @param {object} props
- * @param {string} props.page Content page label, e.g. "Shipping Policy".
+ * @param {string} props.page Content page label, e.g. "Shipping Policy"; labels without
+ *   copy fall back via `resolveContentPage`.
  * @param {{orderNumber?: string}|null} [props.contactContext] Prefills a return request on Contact Us.
  */
-export function ContentPage({ page, contactContext }) {
+export function ContentPage({ page: requestedPage, contactContext }) {
+  const page = resolveContentPage(requestedPage);
   const content = CONTENT_PAGES[page];
   const contactForm = useContactForm();
   const layout = getContentPageLayout(page);
