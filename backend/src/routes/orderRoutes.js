@@ -19,6 +19,7 @@ const { isCouponExpired } = require("../utils/couponExpiry");
 const config = require("../config");
 const pricingService = require("../services/pricingService");
 const inventoryService = require("../services/inventoryService");
+const payuService = require("../services/payuService");
 const {
   ORDER_STATUSES,
   PAYMENT_STATUSES,
@@ -89,6 +90,7 @@ const createOrderSchema = z.object({
     .min(1)
     .max(30),
   couponCode: z.string().trim().optional(),
+  paymentMethod: z.enum(PAYMENT_METHODS).optional(),
 });
 
 const returnExchangeSchema = z.object({
@@ -256,6 +258,10 @@ router.post(
   }),
   asyncHandler(async (req, res) => {
     const data = req.validatedBody;
+    const paymentMethod = data.paymentMethod || PAYMENT_METHODS[0];
+    if (paymentMethod === "payu" && !payuService.isPayuConfigured(config)) {
+      return res.status(503).json({ error: "PayU sandbox credentials and a public HTTPS callback URL are required before online payments can be enabled." });
+    }
     const requested = data.items;
     const quantityTotal = requested.reduce(
       (sum, item) => sum + item.quantity,
@@ -420,7 +426,7 @@ router.post(
         couponCode,
         discount,
         total,
-        paymentMethod: PAYMENT_METHODS[0],
+        paymentMethod,
         status: ORDER_STATUSES[0],
       });
     } catch (error) {
@@ -462,15 +468,15 @@ router.post(
       ),
       Payment.create({
         orderId: order._id,
-        method: PAYMENT_METHODS[0],
+        gateway: paymentMethod === "payu" ? "payu" : undefined,
+        method: paymentMethod,
         amount: total,
         currency: order.currency,
         status: PAYMENT_STATUSES[0],
       }),
       ...stockUpdates,
     ]);
-    res.status(201).json({
-      order: {
+    const orderResponse = {
         orderNumber: order.orderNumber,
         status: order.status,
         currency: order.currency,
@@ -487,10 +493,120 @@ router.post(
         items,
         paymentMethod: order.paymentMethod,
         createdAt: order.createdAt,
-      },
-    });
+      };
+    const response = { order: orderResponse };
+    if (paymentMethod === "payu") {
+      const callbackUrl = config.payuCallbackUrl || `${config.webOrigin.split(",")[0].trim().replace(/\/$/, "")}/api/orders/payu/callback`;
+      response.payment = payuService.buildPaymentRequest({ config, order, callbackUrl });
+    }
+    res.status(201).json(response);
   }),
 );
+
+async function processPayuCallback(payload) {
+  if (!payuService.isPayuConfigured(config) || payload.key !== config.payuKey) {
+    const error = new Error("PayU callback credentials are invalid.");
+    error.status = 400;
+    throw error;
+  }
+  if (!payuService.verifyResponseHash(payload, config)) {
+    const error = new Error("PayU response hash could not be verified.");
+    error.status = 400;
+    throw error;
+  }
+
+  const order = await Order.findOne({ orderNumber: payload.txnid });
+  if (!order || order.paymentMethod !== "payu") {
+    const error = new Error("The PayU transaction does not match an online order.");
+    error.status = 404;
+    throw error;
+  }
+  const payment = await Payment.findOne({ orderId: order._id, gateway: "payu" });
+  if (!payment || Number(payload.amount) !== Number(payment.amount) || Number(payload.amount) !== Number(order.total)) {
+    const error = new Error("PayU transaction amount does not match the order.");
+    error.status = 400;
+    throw error;
+  }
+
+  const verified = await payuService.verifyTransaction(payload.txnid, config);
+  if (!verified || Number(verified.amt ?? verified.transaction_amount) !== Number(payment.amount)) {
+    const error = new Error("PayU could not confirm the transaction amount.");
+    error.status = 400;
+    throw error;
+  }
+
+  if (payment.status === PAYMENT_STATUSES[2]) return { order, result: "success" };
+
+  const status = String(verified.status || "").toLowerCase();
+  if (status === "success") {
+    if (payment.status === PAYMENT_STATUSES[3]) return { order, result: "failed" };
+    await Payment.updateOne(
+      { _id: payment._id, status: PAYMENT_STATUSES[0] },
+      {
+        $set: {
+          status: PAYMENT_STATUSES[2],
+          gatewayTxnId: verified.mihpayid,
+          paidAt: new Date(),
+        },
+      },
+    );
+    return { order, result: "success" };
+  }
+
+  if (status === "failure") {
+    if (payment.status === PAYMENT_STATUSES[2]) return { order, result: "success" };
+    let failureRecorded = payment.status === PAYMENT_STATUSES[3];
+    if (payment.status === PAYMENT_STATUSES[0]) {
+      const failedPayment = await Payment.findOneAndUpdate(
+        { _id: payment._id, status: PAYMENT_STATUSES[0] },
+        { $set: { status: PAYMENT_STATUSES[3], gatewayTxnId: verified.mihpayid } },
+        { new: true },
+      );
+      failureRecorded = Boolean(failedPayment);
+    }
+    if (failureRecorded) {
+      const cancelledOrder = await Order.findOneAndUpdate(
+        { _id: order._id, status: ORDER_STATUSES[0] },
+        { $set: { status: ORDER_STATUSES[4] } },
+        { new: true },
+      );
+      if (cancelledOrder) {
+        await inventoryService.restoreCancelledOrderStock({
+          Product,
+          InventoryLog,
+          orderItems: order.items.map((item) => ({ ...item.toObject(), productId: item.product })),
+          order: cancelledOrder,
+        });
+        if (order.couponCode) {
+          await Coupon.updateOne(
+            { code: order.couponCode, usedCount: { $gt: 0 } },
+            { $inc: { usedCount: -1 } },
+          );
+        }
+      }
+    }
+    return { order, result: "failed" };
+  }
+
+  if (payment.status === PAYMENT_STATUSES[3]) return { order, result: "failed" };
+  return { order, result: "pending" };
+}
+
+router.post("/payu/callback", asyncHandler(async (req, res) => {
+  const { order, result } = await processPayuCallback(req.body || {});
+  const webOrigin = config.webOrigin.split(",")[0].trim().replace(/\/$/, "");
+  const destination = `${webOrigin}/order-confirmation?payment=${result}&order=${encodeURIComponent(order.orderNumber)}`;
+  return res.redirect(303, destination);
+}));
+
+router.post("/payu/webhook", asyncHandler(async (req, res) => {
+  const { order, result } = await processPayuCallback(req.body || {});
+  return res.status(200).json({ received: true, orderNumber: order.orderNumber, payment: result });
+}));
+
+router.get("/payu/status", (_req, res) => {
+  res.json({ available: payuService.isPayuConfigured(config) });
+});
 
 // -----------------------------------------------------------------------------
 // GET /api/orders/:identifier
@@ -518,6 +634,9 @@ router.get(
       .select("type itemIndex item quantity status refundStatus createdAt")
       .sort({ createdAt: -1 })
       .lean();
+    const payment = await Payment.findOne({ orderId: order._id })
+      .select("status")
+      .lean();
 
     res.json({
       success: true,
@@ -540,6 +659,7 @@ router.get(
         items: order.items,
         returnExchangeRequests,
         paymentMethod: order.paymentMethod,
+        paymentStatus: payment?.status || PAYMENT_STATUSES[0],
         trackingId: order.trackingId,
         createdAt: order.createdAt,
         updatedAt: order.updatedAt,

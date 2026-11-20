@@ -1,5 +1,7 @@
 const { USER_ROLES } = require("../constants/roles");
 const { ADMIN_PAGE_BY_PATH } = require("../constants/pages");
+const config = require("../config");
+const { dateKeyInTimeZone, startOfDayInTimeZone } = require("../utils/dateTime");
 const {
   ORDER_STATUSES,
   PAYMENT_STATUSES,
@@ -112,6 +114,8 @@ function registerAdminDashboardRoutes({
     asyncHandler(async (_req, res) => {
       const now = new Date();
       const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const dailyRevenueStart = startOfDayInTimeZone(now, config.storeTimeZone, -6);
+      const dailyRevenueEnd = startOfDayInTimeZone(now, config.storeTimeZone, 1);
 
       const getSalesByCategory = (matchStage) =>
         Order.aggregate([
@@ -201,7 +205,7 @@ function registerAdminDashboardRoutes({
         ProductReview.countDocuments({ isApproved: false }),
       ]);
       const [
-        dailyRevenue,
+        dailyRevenueRows,
         recentOrders,
         lowStockProducts,
         salesByCategory,
@@ -212,12 +216,18 @@ function registerAdminDashboardRoutes({
           {
             $match: {
               status: { $ne: ORDER_STATUSES[4] },
-              createdAt: { $gte: new Date(Date.now() - 7 * 86400000) },
+              createdAt: { $gte: dailyRevenueStart, $lt: dailyRevenueEnd },
             },
           },
           {
             $group: {
-              _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+              _id: {
+                $dateToString: {
+                  format: "%Y-%m-%d",
+                  date: "$createdAt",
+                  timezone: config.storeTimeZone,
+                },
+              },
               revenue: { $sum: "$total" },
               orders: { $sum: 1 },
             },
@@ -234,6 +244,15 @@ function registerAdminDashboardRoutes({
           { $sort: { count: -1 } },
         ]),
       ]);
+      const dailyRevenueByDate = new Map(
+        dailyRevenueRows.map((entry) => [entry._id, entry]),
+      );
+      const dailyRevenue = Array.from({ length: 7 }, (_, index) => {
+        const day = startOfDayInTimeZone(now, config.storeTimeZone, index - 6);
+        const date = dateKeyInTimeZone(day, config.storeTimeZone);
+        const entry = dailyRevenueByDate.get(date);
+        return { _id: date, revenue: entry?.revenue || 0, orders: entry?.orders || 0 };
+      });
       res.json({
         stats: {
           productCount,

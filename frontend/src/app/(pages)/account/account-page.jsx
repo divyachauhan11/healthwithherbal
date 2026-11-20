@@ -1,24 +1,11 @@
 "use client";
 import { useEffect, useState } from "react";
 import {
-  Inbox,
   ShoppingBag,
   MapPin,
-  LogOut,
-  ChevronRight,
   Package,
   Plus,
-  Trash2,
-  CheckCircle2,
-  Loader2,
-  Calendar,
-  CreditCard,
-  FileText,
   Printer,
-  Star,
-  Sparkles,
-  Pencil,
-  RotateCcw,
 } from "lucide-react";
 import {
   fetchUserOrders,
@@ -30,18 +17,22 @@ import {
   uploadReturnExchangePhotos,
 } from "@/lib/api";
 import { ProductReviewModal, ConfirmModal } from "@/components/pages/modals";
+import {
+  AccountAddressCard,
+  AccountLoadingState,
+  AccountPageHeader,
+  AccountSection,
+  AccountSidebar,
+  AddressPreviewCard,
+  NoSavedAddresses,
+  OrderCard,
+} from "@/components/pages/account";
 import { FormModal } from "../../../components/admin/global/FormModal";
-import { dateLabelCompact } from "../../../components/admin/global/admin-utils";
 import {
   ORDER_STATUSES,
   RETURN_EXCHANGE_STATUSES,
   RETURN_EXCHANGE_TYPES,
 } from "@/constants/statuses";
-
-const returnRequestMatchesItem = (request, item, itemIndex) => {
-  if (Number.isInteger(request.itemIndex)) return request.itemIndex === itemIndex;
-  return String(request.item?.title || "").trim().toLowerCase() === String(item.title || "").trim().toLowerCase();
-};
 
 export function AccountPage({
   currentUser,
@@ -56,6 +47,7 @@ export function AccountPage({
 }) {
   const [activeTab, setActiveTab] = useState("overview");
   const [orders, setOrders] = useState([]);
+  const [expandedOrders, setExpandedOrders] = useState({});
   const [addresses, setAddresses] = useState([]);
   const [loadingOrders, setLoadingOrders] = useState(false);
   const [loadingAddresses, setLoadingAddresses] = useState(false);
@@ -313,105 +305,20 @@ export function AccountPage({
 
   const cleanPhone = (currentUser.phone || "").replace(/\D/g, "").slice(-10);
   const displayPhone = cleanPhone ? `+91 ${cleanPhone}` : currentUser.email;
-  const initial = (currentUser.name || "User").trim().charAt(0).toUpperCase();
-
   return (
     <div className="account-page-wrapper page-width">
       <div className="account-layout-grid">
         {/* ================================================================= */}
         {/* LEFT SIDEBAR                                                      */}
         {/* ================================================================= */}
-        <aside className="account-sidebar">
-          {/* User profile card */}
-          <div className="account-user-card">
-            <div className="account-user-card-top">
-              <div className="account-user-meta">
-                <div className="account-user-greeting">
-                  <strong>Hey, {currentUser.name || "User"}</strong>
-                  <ChevronRight size={16} />
-                </div>
-                <div className="account-user-phone">
-                  Logged with {displayPhone}
-                </div>
-              </div>
-              <div className="account-avatar-badge">{initial}</div>
-            </div>
-
-            <div className="account-stat-box">
-              <div className="account-stat-num">{orders.length}</div>
-              <div className="account-stat-label">Total Orders</div>
-            </div>
-          </div>
-
-          {/* Navigation tabs */}
-          <div className="account-nav-group">
-            <div className="account-nav-heading">Account</div>
-
-            <button
-              type="button"
-              className={`account-nav-item ${activeTab === "overview" ? "active" : ""}`}
-              onClick={() => setActiveTab("overview")}
-            >
-              <span className="account-nav-icon">
-                <Inbox size={19} />
-              </span>
-              <div className="account-nav-text">
-                <span className="account-nav-title">Overview</span>
-                <span className="account-nav-sub">
-                  All details at one place, easy to access
-                </span>
-              </div>
-              <ChevronRight size={16} className="account-nav-arrow" />
-            </button>
-
-            <button
-              type="button"
-              className={`account-nav-item ${activeTab === "orders" ? "active" : ""}`}
-              onClick={() => setActiveTab("orders")}
-            >
-              <span className="account-nav-icon">
-                <ShoppingBag size={19} />
-              </span>
-              <div className="account-nav-text">
-                <span className="account-nav-title">My Orders</span>
-                <span className="account-nav-sub">
-                  Track your recent purchases
-                </span>
-              </div>
-              <ChevronRight size={16} className="account-nav-arrow" />
-            </button>
-
-            <button
-              type="button"
-              className={`account-nav-item ${activeTab === "addresses" ? "active" : ""}`}
-              onClick={() => setActiveTab("addresses")}
-            >
-              <span className="account-nav-icon">
-                <MapPin size={19} />
-              </span>
-              <div className="account-nav-text">
-                <span className="account-nav-title">My Address</span>
-                <span className="account-nav-sub">
-                  Manage shipping addresses
-                </span>
-              </div>
-              <ChevronRight size={16} className="account-nav-arrow" />
-            </button>
-
-            <button
-              type="button"
-              className="account-nav-item account-logout-item"
-              onClick={() => setShowLogoutConfirm(true)}
-            >
-              <span className="account-nav-icon logout-icon">
-                <LogOut size={19} />
-              </span>
-              <div className="account-nav-text">
-                <span className="account-nav-title logout-text">Logout</span>
-              </div>
-            </button>
-          </div>
-        </aside>
+        <AccountSidebar
+          currentUser={currentUser}
+          displayPhone={displayPhone}
+          orderCount={orders.length}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onLogout={() => setShowLogoutConfirm(true)}
+        />
 
         {/* ================================================================= */}
         {/* RIGHT MAIN CONTENT AREA                                           */}
@@ -420,467 +327,132 @@ export function AccountPage({
           {/* TAB 1: OVERVIEW */}
           {activeTab === "overview" && (
             <div className="account-tab-content">
-              <h1 className="account-view-title">Overview</h1>
+              <AccountPageHeader title="Overview" />
 
               {/* SECTION: My Orders Overview */}
-              <div className="account-overview-section">
-                <div className="account-section-header">
-                  <h2 className="account-section-title">My Orders</h2>
-                  {orders.length > 0 && (
-                    <button
-                      type="button"
-                      className="account-view-all-link"
-                      onClick={() => setActiveTab("orders")}
-                    >
-                      View All ({orders.length}) →
-                    </button>
-                  )}
-                </div>
-
+              <AccountSection
+                title="My Orders"
+                actionLabel={orders.length > 0 ? `View All (${orders.length}) →` : undefined}
+                onAction={() => setActiveTab("orders")}
+              >
                 {loadingOrders ? (
-                  <div className="account-loading-box">
-                    <Loader2 size={24} className="spin-animate" />
-                    <span>Loading past orders...</span>
-                  </div>
+                  <AccountLoadingState message="Loading past orders..." size={24} />
                 ) : orders.length === 0 ? (
-                  <div className="account-empty-card">
-                    <div className="account-empty-icon-box">
-                      <div className="mock-box-3d">
-                        <Package size={34} />
-                      </div>
-                    </div>
-                    <div className="account-empty-card-content">
-                      <h3 className="account-empty-title">
-                        No Past Orders Yet
-                      </h3>
-                      <p className="account-empty-desc">
-                        Start your first order to see it here.{" "}
-                        <button
-                          type="button"
-                          className="account-inline-cta"
-                          onClick={() => navigate("shop")}
-                        >
-                          Shop Now
-                        </button>
-                      </p>
-                    </div>
-                  </div>
+                  <NoSavedAddresses
+                    title="No Past Orders Yet"
+                    description="Start your first order to see it here."
+                    actionLabel="Shop Now"
+                    inlineAction
+                    Icon={Package}
+                    iconWrapperClassName="mock-box-3d"
+                    style={{}}
+                    onAddAddress={() => navigate("shop")}
+                  />
                 ) : (
                   <div className="account-orders-preview-list">
                     {orders.slice(0, 2).map((order) => (
-                      <div key={order._id} className="account-order-card">
-                        <div className="order-card-header">
-                          <div>
-                            <span className="order-num-tag">
-                              {order.orderNumber}
-                            </span>
-                            <span className="order-date-tag">
-                              {dateLabelCompact(order.createdAt)}
-                            </span>
-                          </div>
-                          <span
-                            className={`order-status-pill status-${order.status || ORDER_STATUSES[0]}`}
-                          >
-                            {order.status || "Confirmed"}
-                          </span>
-                        </div>
-
-                        <div className="order-items-snippet">
-                          {(order.items || []).map((item, idx) => (
-                            <div
-                              key={idx}
-                              className="order-item-mini"
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                                gap: "8px",
-                              }}
-                            >
-                              <div>
-                                <span className="item-name">{item.title}</span>
-                                <span className="item-qty-price">
-                                  Qty: {item.quantity} × ₹{item.unitPrice}
-                                </span>
-                              </div>
-                              {(order.status || "").toLowerCase() ===
-                                ORDER_STATUSES[3] && (
-                                <button
-                                  type="button"
-                                  className="item-review-btn"
-                                  style={{
-                                    padding: "3px 8px",
-                                    fontSize: "11px",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                  onClick={() =>
-                                    setReviewModalData({ item, order })
-                                  }
-                                  title={`Review ${item.title}`}
-                                >
-                                  <Star
-                                    size={11}
-                                    fill="#f59e0b"
-                                    color="#f59e0b"
-                                  />{" "}
-                                  Review
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-
-                        <div className="order-card-footer">
-                          <span className="order-total-label">
-                            Total: <strong>₹{order.total}</strong>
-                          </span>
-                          <button
-                            type="button"
-                            className="order-detail-btn"
-                            onClick={() => onViewOrder?.(order)}
-                          >
-                            View Details
-                          </button>
-                        </div>
-                      </div>
+                      <OrderCard
+                        key={order._id}
+                        order={order}
+                        orderStatuses={ORDER_STATUSES}
+                        returnExchangeStatuses={RETURN_EXCHANGE_STATUSES}
+                        returnExchangeTypes={RETURN_EXCHANGE_TYPES}
+                        isExpanded={Boolean(expandedOrders[order._id])}
+                        onToggle={() => setExpandedOrders((current) => ({
+                          ...current,
+                          [order._id]: !current[order._id],
+                        }))}
+                        onViewOrder={onViewOrder}
+                        onReviewProduct={(item, selectedOrder) =>
+                          setReviewModalData({ item, order: selectedOrder })
+                        }
+                        onRequestReturnExchange={(item, selectedOrder, itemIndex) => {
+                          setReturnRequestData({ item, order: selectedOrder, itemIndex });
+                          setReturnRequestQuantity(1);
+                          setReturnRequestType(RETURN_EXCHANGE_TYPES[0]);
+                          setReturnRequestReason("");
+                          setReturnRequestPhotos([]);
+                        }}
+                      />
                     ))}
                   </div>
                 )}
-              </div>
+              </AccountSection>
 
               {/* SECTION: Saved Addresses Overview */}
-              <div
-                className="account-overview-section"
+              <AccountSection
+                title="Saved Addresses"
+                actionLabel={addresses.length > 0 ? `Manage (${addresses.length}) →` : undefined}
+                onAction={() => setActiveTab("addresses")}
                 style={{ marginTop: "32px" }}
               >
-                <div className="account-section-header">
-                  <h2 className="account-section-title">Saved Addresses</h2>
-                  {addresses.length > 0 && (
-                    <button
-                      type="button"
-                      className="account-view-all-link"
-                      onClick={() => setActiveTab("addresses")}
-                    >
-                      Manage ({addresses.length}) →
-                    </button>
-                  )}
-                </div>
-
                 {loadingAddresses ? (
-                  <div className="account-loading-box">
-                    <Loader2 size={24} className="spin-animate" />
-                    <span>Loading saved addresses...</span>
-                  </div>
+                  <AccountLoadingState message="Loading saved addresses..." size={24} />
                 ) : addresses.length === 0 ? (
-                  <div className="account-empty-card">
-                    <div className="account-empty-icon-box">
-                      <div className="mock-pin-3d">
-                        <MapPin size={34} />
-                      </div>
-                    </div>
-                    <div className="account-empty-card-content">
-                      <h3 className="account-empty-title">
-                        No Address Saved Yet
-                      </h3>
-                      <p className="account-empty-desc">
-                        Tap to add and shop faster{" "}
-                        <button
-                          type="button"
-                          className="account-inline-cta"
-                          onClick={() => {
-                            setActiveTab("addresses");
-                            handleOpenAddAddress();
-                          }}
-                        >
-                          Add New Address Now
-                        </button>
-                      </p>
-                    </div>
-                  </div>
+                  <NoSavedAddresses
+                    title="No Address Saved Yet"
+                    description="Tap to add and shop faster"
+                    actionLabel="Add New Address Now"
+                    inlineAction
+                    style={{}}
+                    onAddAddress={() => {
+                      setActiveTab("addresses");
+                      handleOpenAddAddress();
+                    }}
+                  />
                 ) : (
-                  <div className="account-address-card default-addr-preview">
-                    <div className="address-card-header">
-                      <span className="address-tag-pill">
-                        {addresses[0].tag || "Home"}
-                      </span>
-                      {addresses[0].isDefault && (
-                        <span className="address-default-badge">
-                          <CheckCircle2 size={13} /> Default Delivery Address
-                        </span>
-                      )}
-                    </div>
-                    <div className="address-recipient">
-                      {addresses[0].fullName}
-                    </div>
-                    <div className="address-lines">
-                      {addresses[0].line1}
-                      {addresses[0].line2
-                        ? `, ${addresses[0].line2}`
-                        : ""}, {addresses[0].city}, {addresses[0].state || ""} -{" "}
-                      {addresses[0].postalCode}
-                    </div>
-                    <div className="address-phone">
-                      Phone: {addresses[0].phone}
-                    </div>
-                  </div>
+                  <AddressPreviewCard address={addresses[0]} />
                 )}
-              </div>
+              </AccountSection>
             </div>
           )}
 
           {/* TAB 2: MY ORDERS */}
           {activeTab === "orders" && (
             <div className="account-tab-content">
-              <div className="account-section-header">
-                <div>
-                  <h1 className="account-view-title">My Orders</h1>
-                  <p className="account-view-sub">
-                    Showing all orders placed from your verified account.
-                  </p>
-                </div>
-              </div>
+              <AccountPageHeader
+                title="My Orders"
+                description="Showing all orders placed from your verified account."
+              />
 
               {loadingOrders ? (
-                <div className="account-loading-box">
-                  <Loader2 size={28} className="spin-animate" />
-                  <span>Loading order history from database...</span>
-                </div>
+                <AccountLoadingState message="Loading order history from database..." />
               ) : orders.length === 0 ? (
-                <div
-                  className="account-empty-card"
-                  style={{ marginTop: "24px" }}
-                >
-                  <div className="account-empty-icon-box">
-                    <div className="mock-box-3d">
-                      <Package size={38} />
-                    </div>
-                  </div>
-                  <div className="account-empty-card-content">
-                    <h3 className="account-empty-title">No Orders Found</h3>
-                    <p className="account-empty-desc">
-                      You haven’t placed any orders yet. Discover our pure
-                      Ayurvedic remedies today.
-                    </p>
-                    <button
-                      type="button"
-                      className="app-button"
-                      style={{ marginTop: "14px" }}
-                      onClick={() => navigate("shop")}
-                    >
-                      Start Shopping
-                    </button>
-                  </div>
-                </div>
+                <NoSavedAddresses
+                  title="No Orders Found"
+                  description="You haven’t placed any orders yet. Discover our pure Ayurvedic remedies today."
+                  actionLabel="Start Shopping"
+                  Icon={Package}
+                  actionIcon={null}
+                  iconWrapperClassName="mock-box-3d"
+                  onAddAddress={() => navigate("shop")}
+                />
               ) : (
                 <div className="account-orders-full-list">
                   {orders.map((order) => (
-                    <div
+                    <OrderCard
                       key={order._id}
-                      className="account-order-card full-order-card"
-                    >
-                      <div className="order-card-header">
-                        <div className="order-meta-info">
-                          <span className="order-num-tag">
-                            {order.orderNumber}
-                          </span>
-                          <span className="order-date-tag">
-                            <Calendar size={13} />
-                            {new Date(order.createdAt).toLocaleDateString(
-                              "en-IN",
-                              {
-                                day: "numeric",
-                                month: "short",
-                                year: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              },
-                            )}
-                          </span>
-                        </div>
-                        <span
-                          className={`order-status-pill status-${order.status || ORDER_STATUSES[0]}`}
-                        >
-                          {order.status
-                            ? order.status.toUpperCase()
-                            : "CONFIRMED"}
-                        </span>
-                      </div>
-
-                      {(order.status || "").toLowerCase() === ORDER_STATUSES[3] && (
-                        <div
-                          className="delivered-review-callout"
-                          style={{ margin: "10px 0 14px" }}
-                        >
-                          <div className="callout-icon-box">
-                            <Sparkles size={16} color="#15803d" />
-                          </div>
-                          <div className="callout-text">
-                            <strong>Order Delivered!</strong>
-                            <p>
-                              Share your authentic experience with the herbal
-                              products below. Your feedback helps our community!
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Items */}
-                      <div className="order-items-grid">
-                        {(order.items || []).map((item, idx) => (
-                          <div key={idx} className="order-item-detailed">
-                            <div className="order-item-img-placeholder">
-                              <Package size={20} />
-                            </div>
-                            <div className="order-item-info">
-                              <div className="item-title">{item.title}</div>
-                              <div className="item-brand">
-                                {item.brand || "Health with Herbal"}
-                              </div>
-                              <div className="item-qty">
-                                Qty: {item.quantity}
-                              </div>
-                              {(order.returnExchangeRequests || [])
-                                .filter((request) => returnRequestMatchesItem(request, item, idx))
-                                .map((request) => (
-                                  <div key={request._id} className={`customer-return-status customer-return-status-${request.status || RETURN_EXCHANGE_STATUSES[0]}`}>
-                                    <RotateCcw size={13} />
-                                    <span>{request.type === RETURN_EXCHANGE_TYPES[1] ? "Exchange" : "Return"} request</span>
-                                    <strong>{(request.status || RETURN_EXCHANGE_STATUSES[0]).charAt(0).toUpperCase() + (request.status || RETURN_EXCHANGE_STATUSES[0]).slice(1)}</strong>
-                                  </div>
-                                ))}
-                            </div>
-                            <div
-                              style={{
-                                display: "flex",
-                                flexDirection: "column",
-                                alignItems: "flex-end",
-                                gap: "6px",
-                              }}
-                            >
-                              <div className="order-item-price">
-                                ₹
-                                {item.lineTotal ||
-                                  item.unitPrice * item.quantity}
-                              </div>
-                              {(order.status || "").toLowerCase() ===
-                                ORDER_STATUSES[3] && (
-                                <>
-                                  <button
-                                    type="button"
-                                    className="item-review-btn"
-                                    onClick={() =>
-                                      setReviewModalData({ item, order })
-                                    }
-                                    title={`Review ${item.title}`}
-                                  >
-                                    <Star
-                                      size={12}
-                                      fill="#f59e0b"
-                                      color="#f59e0b"
-                                    />
-                                    <span>Review Product</span>
-                                  </button>
-                                  {(order.returnExchangeRequests || []).some((request) => returnRequestMatchesItem(request, item, idx)) ? (
-                                    <span className="item-review-btn return-exchange-request-btn is-submitted" aria-label="Return or exchange request already submitted">
-                                      <CheckCircle2 size={13} />
-                                      <span>Request submitted</span>
-                                    </span>
-                                  ) : (
-                                    <button
-                                      type="button"
-                                      className="item-review-btn return-exchange-request-btn"
-                                      onClick={() => {
-                                        setReturnRequestData({ item, order, itemIndex: idx });
-                                        setReturnRequestQuantity(1);
-                                        setReturnRequestType(RETURN_EXCHANGE_TYPES[0]);
-                                        setReturnRequestReason("");
-                                        setReturnRequestPhotos([]);
-                                      }}
-                                    >
-                                      <RotateCcw size={13} />
-                                      <span>Request Return / Exchange</span>
-                                    </button>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Summary Breakdown */}
-                      <div className="order-summary-breakdown">
-                        <div className="summary-row">
-                          <span>Subtotal:</span>
-                          <span>₹{order.subtotal}</span>
-                        </div>
-                        <div className="summary-row">
-                          <span>Shipping:</span>
-                          <span>
-                            {order.shipping === 0
-                              ? "FREE"
-                              : `₹${order.shipping}`}
-                          </span>
-                        </div>
-                        {order.discount > 0 && (
-                          <div className="summary-row discount">
-                            <span>
-                              Discount{" "}
-                              {order.couponCode ? `(${order.couponCode})` : ""}:
-                            </span>
-                            <span>-₹{order.discount}</span>
-                          </div>
-                        )}
-                        <div className="summary-row grand-total">
-                          <span>Total Paid:</span>
-                          <span className="total-highlight">
-                            ₹{order.total}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Details row: Address & Note */}
-                      <div className="order-details-bottom-row">
-                        {order.shippingAddress && (
-                          <div className="order-delivery-snapshot">
-                            <strong>Delivery Address:</strong>
-                            <p>
-                              {order.shippingAddress.firstName}{" "}
-                              {order.shippingAddress.lastName} <br />
-                              {order.shippingAddress.street},{" "}
-                              {order.shippingAddress.city} -{" "}
-                              {order.shippingAddress.postalCode}
-                            </p>
-                          </div>
-                        )}
-
-                        {order.orderNote && (
-                          <div className="order-delivery-note">
-                            <FileText size={15} />
-                            <span>
-                              <strong>Note:</strong> {order.orderNote}
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="order-payment-badge">
-                          <CreditCard size={15} />
-                          <span>
-                            {order.paymentMethod === "cash_on_delivery"
-                              ? "Cash on Delivery"
-                              : "Online Payment"}
-                          </span>
-                        </div>
-
-                        <button
-                          type="button"
-                          className="order-view-receipt-action"
-                          onClick={() => onViewOrder?.(order)}
-                        >
-                          <FileText size={13} /> View Details
-                        </button>
-                      </div>
-                    </div>
+                      order={order}
+                      orderStatuses={ORDER_STATUSES}
+                      returnExchangeStatuses={RETURN_EXCHANGE_STATUSES}
+                      returnExchangeTypes={RETURN_EXCHANGE_TYPES}
+                      isExpanded={Boolean(expandedOrders[order._id])}
+                      onToggle={() => setExpandedOrders((current) => ({
+                        ...current,
+                        [order._id]: !current[order._id],
+                      }))}
+                      onViewOrder={onViewOrder}
+                      onReviewProduct={(item, selectedOrder) =>
+                        setReviewModalData({ item, order: selectedOrder })
+                      }
+                      onRequestReturnExchange={(item, selectedOrder, itemIndex) => {
+                        setReturnRequestData({ item, order: selectedOrder, itemIndex });
+                        setReturnRequestQuantity(1);
+                        setReturnRequestType(RETURN_EXCHANGE_TYPES[0]);
+                        setReturnRequestReason("");
+                        setReturnRequestPhotos([]);
+                      }}
+                    />
                   ))}
                 </div>
               )}
@@ -890,13 +462,10 @@ export function AccountPage({
           {/* TAB 3: MY ADDRESSES */}
           {activeTab === "addresses" && (
             <div className="account-tab-content">
-              <div className="account-section-header">
-                <div>
-                  <h1 className="account-view-title">My Addresses</h1>
-                  <p className="account-view-sub">
-                    Manage your delivery addresses for seamless checkout.
-                  </p>
-                </div>
+              <AccountPageHeader
+                title="My Addresses"
+                description="Manage your delivery addresses for seamless checkout."
+              >
                 <button
                   type="button"
                   className="app-button add-address-btn"
@@ -904,87 +473,22 @@ export function AccountPage({
                 >
                   <Plus size={16} /> Add New Address
                 </button>
-              </div>
+              </AccountPageHeader>
 
               {/* Addresses List */}
               {loadingAddresses ? (
-                <div className="account-loading-box">
-                  <Loader2 size={28} className="spin-animate" />
-                  <span>Loading saved addresses from database...</span>
-                </div>
+                <AccountLoadingState message="Loading saved addresses from database..." />
               ) : addresses.length === 0 ? (
-                <div
-                  className="account-empty-card"
-                  style={{ marginTop: "24px" }}
-                >
-                  <div className="account-empty-icon-box">
-                    <div className="mock-pin-3d">
-                      <MapPin size={38} />
-                    </div>
-                  </div>
-                  <div className="account-empty-card-content">
-                    <h3 className="account-empty-title">No Saved Addresses</h3>
-                    <p className="account-empty-desc">
-                      Add your shipping address for one-click checkout.
-                    </p>
-                    <button
-                      type="button"
-                      className="app-button"
-                      style={{ marginTop: "14px" }}
-                      onClick={handleOpenAddAddress}
-                    >
-                      <Plus size={16} /> Add Address
-                    </button>
-                  </div>
-                </div>
+                <NoSavedAddresses onAddAddress={handleOpenAddAddress} />
               ) : (
                 <div className="account-addresses-grid">
                   {addresses.map((addr) => (
-                    <div
+                    <AccountAddressCard
                       key={addr._id}
-                      className={`account-address-card ${addr.isDefault ? "is-default" : ""}`}
-                    >
-                      <div className="address-card-header">
-                        <span className="address-tag-pill">
-                          {addr.tag || "Home"}
-                        </span>
-                        {addr.isDefault && (
-                          <span className="address-default-badge">
-                            <CheckCircle2 size={13} /> Default
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="address-recipient">{addr.fullName}</div>
-                      <div className="address-lines">
-                        {addr.line1}
-                        {addr.line2 ? `, ${addr.line2}` : ""}, <br />
-                        {addr.city}, {addr.state ? `${addr.state} - ` : ""}
-                        {addr.postalCode}
-                        <br />
-                        {addr.country || "India"}
-                      </div>
-                      <div className="address-phone">Phone: {addr.phone}</div>
-
-                      <div className="address-card-actions">
-                        <button
-                          type="button"
-                          className="address-edit-btn"
-                          onClick={() => handleOpenEditAddress(addr)}
-                          title="Edit address"
-                        >
-                          <Pencil size={14} /> Edit
-                        </button>
-                        <button
-                          type="button"
-                          className="address-delete-btn"
-                          onClick={() => setAddressToDelete(addr)}
-                          title="Delete address"
-                        >
-                          <Trash2 size={15} /> Delete
-                        </button>
-                      </div>
-                    </div>
+                      address={addr}
+                      onEdit={handleOpenEditAddress}
+                      onDelete={setAddressToDelete}
+                    />
                   ))}
                 </div>
               )}

@@ -367,7 +367,7 @@ export function ContentPage({ page, openCatalog, contactContext }) {
                   <details
                     className={`story-value-card story-value-${index + 1}`}
                     key={section.title}
-                    open={index === 0}
+                    open
                   >
                     <summary>
                       <span>{String(index + 1).padStart(2, "0")}</span>

@@ -53,6 +53,12 @@ export async function createOrder(payload) {
   return result.order;
 }
 
+export function createPayuCheckout(payload) {
+  return apiPost("/orders", { ...payload, paymentMethod: "payu" });
+}
+
+export const fetchPayuStatus = () => apiGet("/orders/payu/status", noStore);
+
 export const submitReturnExchangeRequest = (payload) =>
   apiPost("/orders/return-exchange", payload);
 

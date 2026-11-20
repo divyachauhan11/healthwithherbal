@@ -41,7 +41,7 @@ const BLOG_COMMENT_STATUSES = Object.freeze([
 ]);
 const REVIEW_STATUSES = Object.freeze(["pending", "approved", "rejected"]);
 const DISCOUNT_TYPES = Object.freeze(["percent", "fixed", "free_shipping"]);
-const PAYMENT_METHODS = Object.freeze(["cash_on_delivery"]);
+const PAYMENT_METHODS = Object.freeze(["cash_on_delivery", "payu"]);
 
 module.exports = {
   ORDER_STATUSES,

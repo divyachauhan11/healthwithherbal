@@ -2687,15 +2687,24 @@ details summary { list-style: none; display: flex; justify-content: space-betwee
 
 .checkout-payu-pay-now {
   display: block;
+  width: calc(100% - 30px);
   margin: 16px 0 0 30px;
   padding: 13px 18px;
+  border: 0;
   border-radius: 5px;
-  background: #ff386b;
+  background: var(--forest);
   color: #fff;
+  font-family: inherit;
   font-size: 14px;
   font-weight: 700;
   line-height: 1.3;
   text-align: center;
+  cursor: pointer;
+}
+
+.checkout-payu-pay-now:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .checkout-payment-header {
@@ -5596,10 +5605,91 @@ details summary { list-style: none; display: flex; justify-content: space-betwee
   border-bottom: 1px solid #f3f4f6;
 }
 
+.order-card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.order-card-toggle {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border: 1px solid #e5e7eb;
+  border-radius: 50%;
+  background: #fff;
+  color: var(--forest);
+  cursor: pointer;
+}
+
+.order-card-toggle:hover {
+  background: #f8f5ef;
+}
+
+.order-card-toggle:focus-visible {
+  outline: 2px solid var(--forest);
+  outline-offset: 2px;
+}
+
+.order-card-toggle-icon {
+  transition: transform 0.18s ease;
+}
+
+.order-card-toggle-icon.is-expanded {
+  transform: rotate(180deg);
+}
+
+.account-order-card.full-order-card.is-collapsed > :not(.order-card-header) {
+  display: none;
+}
+
 .order-meta-info {
   display: flex;
   align-items: center;
   gap: 14px;
+}
+
+.order-collapsed-product {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.order-collapsed-product-image {
+  width: 48px;
+  height: 48px;
+}
+
+.order-collapsed-product-info {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.order-collapsed-product-info strong,
+.order-collapsed-product-info span,
+.order-collapsed-product-info small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.order-collapsed-product-info strong {
+  color: #1f2937;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.order-collapsed-product-info span {
+  color: #6b7280;
+  font-size: 11px;
+}
+
+.order-collapsed-product-info small {
+  color: #4b5563;
+  font-size: 11px;
 }
 
 .order-num-tag {
@@ -5692,6 +5782,8 @@ details summary { list-style: none; display: flex; justify-content: space-betwee
 }
 
 .order-item-img-placeholder {
+  position: relative;
+  overflow: hidden;
   width: 42px;
   height: 42px;
   border-radius: 8px;
@@ -5700,6 +5792,14 @@ details summary { list-style: none; display: flex; justify-content: space-betwee
   place-items: center;
   color: #786f63;
   flex-shrink: 0;
+}
+
+.order-item-img-placeholder img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .order-item-info {

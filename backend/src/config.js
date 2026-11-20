@@ -16,6 +16,10 @@ const config = {
   brevoSenderEmail:
     process.env.BREVO_SENDER_EMAIL || "support@healthwithherbal.com",
   brevoSenderName: process.env.BREVO_SENDER_NAME || "Health with Herbal",
+  payuKey: (process.env.PAYU_KEY || "").trim(),
+  payuSalt: (process.env.PAYU_SALT || "").trim(),
+  payuEnvironment: process.env.PAYU_ENVIRONMENT === "production" ? "production" : "test",
+  payuCallbackUrl: (process.env.PAYU_CALLBACK_URL || "").trim(),
   contactEmail: process.env.CONTACT_EMAIL || "healthwithherbalindia@gmail.com",
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || "",
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || "",

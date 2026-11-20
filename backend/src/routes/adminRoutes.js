@@ -90,6 +90,7 @@ registerAdminOrderRoutes({
   router,
   asyncHandler,
   Order,
+  Payment,
   OrderItem,
   Product,
   InventoryLog,

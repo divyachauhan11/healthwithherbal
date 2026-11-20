@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ArrowLeft, Eye, EyeOff, Loader2, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, Eye, EyeOff, Loader2, RefreshCw } from "lucide-react";
 import { adminRequest } from "@/lib/admin-api";
 import { DashboardPanel } from "@/components/admin/dashboard";
 import {
@@ -133,14 +133,14 @@ export default function LowStockPage({
           <div className="low-stock-panel-actions">
             <button
               type="button"
-              className="text-button"
+              className="text-button low-stock-header-action"
               onClick={() => onNavigate?.("Dashboard")}
             >
               <ArrowLeft size={15} /> Dashboard
             </button>
             <button
               type="button"
-              className="text-button"
+              className="text-button low-stock-header-action"
               onClick={() => onRefresh?.()}
               title="Refresh list"
             >
@@ -149,22 +149,17 @@ export default function LowStockPage({
           </div>
         )}
       >
-        <div className="page-tools">
+        <div className="page-tools low-stock-tools">
           <SearchField
             value={query}
             onChange={setQuery}
             placeholder="Search low stock products by title, SKU, category…"
           />
-          <button
-            type="button"
-            className="primary"
-            onClick={() => setForm({ kind: "products", item: null })}
-          >
-            <Plus size={16} /> Add new product
-          </button>
         </div>
 
         <DataTable
+          className="low-stock-data-table"
+          tableClassName="low-stock-table"
           data={displayedItems}
           rowKey="_id"
           pageSize={10}
@@ -179,20 +174,12 @@ export default function LowStockPage({
               sortable: true,
               render: (product) => (
                 <div className="product-cell">
-                  <div
-                    className="product-thumb"
-                    style={{
-                      background: "var(--forest, #3f6050)",
-                      color: "#fff",
-                      overflow: "hidden",
-                      borderRadius: "6px",
-                    }}
-                  >
+                  <div className="product-thumb low-stock-product-thumb">
                     {product.image ? (
                       <img
                         src={product.image}
                         alt={product.title}
-                        style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                        className="low-stock-product-image"
                       />
                     ) : (
                       product.title?.slice(0, 1)
@@ -213,11 +200,11 @@ export default function LowStockPage({
               sortable: true,
               render: (product) => {
                 const quantity = Number(product.stockQty ?? 0);
-                const tone = quantity === 0
-                  ? { background: "#fee2e2", color: "#991b1b" }
+                const severity = quantity === 0
+                  ? "out"
                   : quantity <= 4
-                    ? { background: "#ffedd5", color: "#9a3412" }
-                    : { background: "#fef3c7", color: "#92400e" };
+                    ? "critical"
+                    : "low";
                 const label = quantity === 0
                   ? "OUT"
                   : quantity <= 4
@@ -225,15 +212,7 @@ export default function LowStockPage({
                     : "LOW";
 
                 return (
-                  <span style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    padding: "3px 8px",
-                    borderRadius: "12px",
-                    fontSize: "11px",
-                    fontWeight: "700",
-                    ...tone,
-                  }}>
+                  <span className={`low-stock-badge is-${severity}`}>
                     {label} ({quantity}{quantity > 0 ? " left" : ""})
                   </span>
                 );
@@ -252,21 +231,20 @@ export default function LowStockPage({
               render: (product) => {
                 const isRestocking = restockingId === product._id;
                 return (
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <div className="low-stock-restock-controls">
                     {[10, 25].map((amount) => (
                       <button
                         key={amount}
                         type="button"
-                        className="outline"
+                        className="outline low-stock-restock-button"
                         disabled={isRestocking}
                         onClick={() => handleQuickRestock(product._id, amount)}
-                        style={{ padding: "4px 8px", fontSize: "10.5px", fontWeight: "600" }}
                         title={`Add ${amount} units`}
                       >
                         +{amount}
                       </button>
                     ))}
-                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                    <div className="low-stock-exact-controls">
                       <input
                         type="number"
                         min="0"
@@ -278,19 +256,18 @@ export default function LowStockPage({
                             [product._id]: event.target.value,
                           }))
                         }
-                        style={{ width: "50px", height: "26px", padding: "0 6px", fontSize: "11px", border: "1px solid #d1d5db", borderRadius: "4px" }}
+                        className="low-stock-quantity-input"
                         aria-label={`Set stock quantity for ${product.title}`}
                       />
                       <button
                         type="button"
-                        className="primary"
+                        className="primary low-stock-set-button"
                         disabled={
                           isRestocking ||
                           customStockInputs[product._id] === undefined ||
                           customStockInputs[product._id] === ""
                         }
                         onClick={() => handleSetExactStock(product._id)}
-                        style={{ padding: "4px 8px", fontSize: "10px" }}
                       >
                         {isRestocking ? (
                           <Loader2 size={12} className="spin-animate" />

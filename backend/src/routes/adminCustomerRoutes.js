@@ -43,6 +43,11 @@ function registerAdminCustomerRoutes({ router, asyncHandler, Order, User, Paymen
       !PAYMENT_STATUSES.includes(status) ||
       (paidAt && Number.isNaN(paidDate.getTime()))
     ) return res.status(400).json({ error: "Enter valid payment details." });
+    const existingPayment = await Payment.findById(req.params.id).select("gateway status");
+    if (!existingPayment) return res.status(404).json({ error: "Payment not found." });
+    if (existingPayment.gateway === "payu") {
+      return res.status(409).json({ error: "PayU payment records are managed by verified PayU responses." });
+    }
     const payment = await Payment.findByIdAndUpdate(req.params.id, {
       method: method.trim(), gateway: gateway.trim(), gatewayTxnId: gatewayTxnId.trim(),
       amount: numericAmount, currency, status, paidAt: paidDate,

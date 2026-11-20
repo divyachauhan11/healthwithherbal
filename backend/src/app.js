@@ -32,6 +32,7 @@ app.use(
 // Blog posts allow up to 50,000 characters of content; leave room for UTF-8
 // encoding and the rest of the JSON payload while still bounding request size.
 app.use(express.json({ limit: "256kb" }));
+app.use(express.urlencoded({ extended: false, limit: "32kb" }));
 
 const uploadsDir = path.join(__dirname, "../uploads");
 if (!fs.existsSync(uploadsDir)) {

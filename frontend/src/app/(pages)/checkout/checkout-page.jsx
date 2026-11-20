@@ -15,9 +15,10 @@ import {
 } from "lucide-react";
 import { FormModal } from "../../../components/admin/global/FormModal";
 import { ConfirmModal } from "@/components/pages/modals";
-import { LOGO_URL } from "@/lib/store-data";
 import {
   createOrder,
+  createPayuCheckout,
+  fetchPayuStatus,
   validateCoupon,
   fetchUserAddresses,
   saveUserAddress,
@@ -190,6 +191,8 @@ export function CheckoutPage({
   const [addressToDelete, setAddressToDelete] = useState(null);
   const [deletingAddress, setDeletingAddress] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState("cash_on_delivery");
+  const paymentMethodRef = useRef("cash_on_delivery");
+  const [payuAvailable, setPayuAvailable] = useState(false);
 
   // Controlled form state
   const [formData, setFormData] = useState({
@@ -205,6 +208,14 @@ export function CheckoutPage({
     country: "India",
   });
   const [addressTag, setAddressTag] = useState("Home");
+
+  useEffect(() => {
+    let active = true;
+    fetchPayuStatus()
+      .then((result) => { if (active) setPayuAvailable(Boolean(result.available)); })
+      .catch(() => { if (active) setPayuAvailable(false); });
+    return () => { active = false; };
+  }, []);
 
   const activeProducts = products;
 
@@ -558,7 +569,7 @@ export function CheckoutPage({
           onClick={() => navigate?.("home")}
           aria-label="Health With Herbal home"
         >
-          <img src={LOGO_URL} alt="Health With Herbal" />
+          <img src="/health-with-herbal-logo-checkout.png" alt="Health With Herbal" />
         </button>
         <nav className="checkout-flow-steps" aria-label="Checkout progress">
           <span className="checkout-flow-step complete">Bag</span>
@@ -682,12 +693,7 @@ export function CheckoutPage({
             onSubmit={async (event) => {
               event.preventDefault();
               if (checkoutStep !== "payment") return;
-              if (paymentMethod === "payu") {
-                setError(
-                  "PayU online payments are not configured yet. Please choose Cash on Delivery.",
-                );
-                return;
-              }
+              const selectedPaymentMethod = paymentMethodRef.current;
               if (
                 !selectedAddressId ||
                 !formData.street.trim() ||
@@ -701,7 +707,7 @@ export function CheckoutPage({
               setError("");
 
               try {
-                const order = await createOrder({
+                const orderPayload = {
                   customer: {
                     firstName: formData.firstName.trim(),
                     lastName: formData.lastName.trim(),
@@ -724,7 +730,27 @@ export function CheckoutPage({
                   })),
                   couponCode: appliedCoupon?.code,
                   shippingMethod: shippingOption.method || "standard",
-                });
+                };
+                if (selectedPaymentMethod === "payu") {
+                  const checkout = await createPayuCheckout(orderPayload);
+                  try {
+                    localStorage.setItem("hwh_last_order", JSON.stringify(checkout.order));
+                  } catch {}
+                  const form = document.createElement("form");
+                  form.method = "POST";
+                  form.action = checkout.payment.action;
+                  Object.entries(checkout.payment.fields).forEach(([name, value]) => {
+                    const input = document.createElement("input");
+                    input.type = "hidden";
+                    input.name = name;
+                    input.value = String(value ?? "");
+                    form.appendChild(input);
+                  });
+                  document.body.appendChild(form);
+                  form.submit();
+                  return;
+                }
+                const order = await createOrder(orderPayload);
                 onComplete(order);
               } catch (requestError) {
                 setError(
@@ -756,6 +782,7 @@ export function CheckoutPage({
                   className={`checkout-payment-box ${paymentMethod === "cash_on_delivery" ? "selected" : ""}`}
                   aria-pressed={paymentMethod === "cash_on_delivery"}
                   onClick={() => {
+                    paymentMethodRef.current = "cash_on_delivery";
                     setPaymentMethod("cash_on_delivery");
                     setError("");
                   }}
@@ -777,14 +804,8 @@ export function CheckoutPage({
                   </p>
                 </button>
 
-                <button
-                  type="button"
+                <div
                   className={`checkout-payment-box checkout-payu-box ${paymentMethod === "payu" ? "selected" : ""}`}
-                  aria-pressed={paymentMethod === "payu"}
-                  onClick={() => {
-                    setPaymentMethod("payu");
-                    setError("");
-                  }}
                 >
                   <div className="checkout-payment-header">
                     <div className="checkout-payment-option">
@@ -802,17 +823,27 @@ export function CheckoutPage({
                       </span>
                     </div>
                     <span className="checkout-payment-badge checkout-payu-badge">
-                      Coming soon
+                      {payuAvailable ? "Secure checkout" : "Setup required"}
                     </span>
                   </div>
                   <p className="payment-note">
                     Pay securely by credit or debit card, or internet banking
                     through PayU.
                   </p>
-                  <span className="checkout-payu-pay-now" aria-hidden="true">
-                    Pay Now
-                  </span>
-                </button>
+                  <button
+                    className="checkout-payu-pay-now"
+                    type="button"
+                    disabled={submitting || !payuAvailable}
+                    onClick={() => {
+                      paymentMethodRef.current = "payu";
+                      setPaymentMethod("payu");
+                      setError("");
+                      document.getElementById("checkout-details-form")?.requestSubmit();
+                    }}
+                  >
+                    {payuAvailable ? "Pay Now" : "Sandbox setup required"}
+                  </button>
+                </div>
 
                 <div className="checkout-trust-guarantee">
                   <div className="guarantee-item">
@@ -1060,7 +1091,7 @@ export function CheckoutPage({
                 Placing your order…
               </>
             ) : (
-              <span>Place Order · ₹{finalTotal.toFixed(2)}</span>
+              <span>{paymentMethod === "payu" ? "Pay Now" : "Place Order"} · ₹{finalTotal.toFixed(2)}</span>
             )}
           </button>
 

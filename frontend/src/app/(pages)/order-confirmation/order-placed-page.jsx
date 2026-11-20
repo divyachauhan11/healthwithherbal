@@ -189,6 +189,44 @@ export function OrderPlacedPage({
   const [liveOrderData, setLiveOrderData] = useState(null);
   const [reviewModalItem, setReviewModalItem] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const [paymentResult, setPaymentResult] = useState("");
+
+  useEffect(() => {
+    if (detailMode || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const identifier = params.get("order");
+    const result = params.get("payment");
+    if (!identifier || !["success", "failed", "pending"].includes(result)) return;
+    setPaymentResult("pending");
+    let active = true;
+    fetchOrderDetails(identifier)
+      .then((fresh) => {
+        if (!active || !fresh) return;
+        setCachedOrder(fresh);
+        setPaymentResult(
+          fresh.paymentStatus === "paid"
+            ? "success"
+            : fresh.paymentStatus === "failed"
+              ? "failed"
+              : "pending",
+        );
+        if (fresh.paymentStatus === "paid") {
+          window.setTimeout(() => window.dispatchEvent(new Event("hwh-payment-order-complete")), 0);
+          try {
+            localStorage.removeItem("hwh_cart");
+          } catch {}
+        }
+        try {
+          localStorage.setItem("hwh_last_order", JSON.stringify(fresh));
+        } catch {}
+      })
+      .catch((error) => {
+        if (active) console.error("Could not load the PayU order result:", error);
+      });
+    return () => {
+      active = false;
+    };
+  }, [detailMode]);
 
   useEffect(() => {
     if (!detailMode || order || typeof window === "undefined") return;
@@ -474,12 +512,20 @@ export function OrderPlacedPage({
           {detailMode ? "ORDER DETAILS" : "ORDER CONFIRMED"}
         </span>
         <h1 className="order-placed-title">
-          {detailMode
+          {paymentResult === "failed"
+            ? "Payment was not completed"
+            : paymentResult === "pending"
+              ? "Payment is being confirmed"
+              : detailMode
             ? "Your Order Information"
             : "Thank You for Choosing Pure Wellness"}
         </h1>
         <p className="order-placed-subtitle">
-          {detailMode
+          {paymentResult === "failed"
+            ? "Your online payment did not complete. Return to checkout to place a new order, or contact support if your account was charged."
+            : paymentResult === "pending"
+              ? "PayU is still confirming this transaction. Please check your order status again shortly."
+              : detailMode
             ? "Review the products, delivery details, payment method, and latest status for this order."
             : "Your order has been safely placed and is now being lovingly prepared by our Ayurvedic apothecarists."}
         </p>

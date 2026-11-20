@@ -139,6 +139,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const clearCartAfterOnlinePayment = () => updateCart([]);
+    window.addEventListener("hwh-payment-order-complete", clearCartAfterOnlinePayment);
+    return () => window.removeEventListener("hwh-payment-order-complete", clearCartAfterOnlinePayment);
+  }, []);
+
+  useEffect(() => {
     if (!sessionReady) return;
     let active = true;
     setWishlist([]);

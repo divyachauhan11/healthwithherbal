@@ -46,6 +46,7 @@ const orderSchema = new mongoose.Schema(
         lowercase: true,
         index: true,
       },
+      phone: { type: String, trim: true, default: "" },
       street: { type: String, required: true, trim: true },
       city: { type: String, required: true, trim: true },
       state: { type: String, trim: true, default: "" },
