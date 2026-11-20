@@ -1,5 +1,10 @@
 "use client";
 import { HeartHandshake, Leaf, Star, Users } from "lucide-react";
+import { WhyCard } from "./WhyCard";
+
+/**
+ * "Why Health with Herbal" section: three trust cards and a disclaimer.
+ */
 export function WhyHealthWithHerbal() {
     const points = [
         {
@@ -46,13 +51,9 @@ export function WhyHealthWithHerbal() {
         </div>
 
         <div className="why-grid">
-          {points.map((item, idx) => (<div key={idx} className={`why-card ${item.glow}`}>
-              <div className="why-card-top">
-                <h3>{item.title}</h3>
-                {item.icon}
-              </div>
-              <p className="why-card-text">{item.text}</p>
-            </div>))}
+          {points.map((item, idx) => (
+            <WhyCard key={idx} title={item.title} glow={item.glow} icon={item.icon} text={item.text} />
+          ))}
         </div>
 
         <p className="why-disclaimer">
