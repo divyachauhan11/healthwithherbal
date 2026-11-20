@@ -22,7 +22,7 @@ export function useCheckoutCoupon({ subtotal }) {
   const couponInputRef = useRef(null);
 
   const discountAmount = useMemo(
-    () => couponDiscountFor(appliedCoupon, subtotal, { capped: true }),
+    () => couponDiscountFor(appliedCoupon, subtotal),
     [appliedCoupon, subtotal],
   );
 

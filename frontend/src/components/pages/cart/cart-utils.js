@@ -132,22 +132,21 @@ export const toCartSyncItems = (lineItems) =>
 
 /**
  * Discount a coupon gives on a subtotal: nothing below its minimum order
- * amount, a percentage or a fixed amount (never more than the subtotal).
+ * amount, a percentage (capped at `maxDiscountAmount` when set, as the
+ * backend does) or a fixed amount (never more than the subtotal).
  * Free-shipping coupons discount nothing here.
  * @param {object|null} coupon Validated coupon.
  * @param {number} subtotal Subtotal at selling prices.
- * @param {{capped?: boolean}} [options] `capped` applies the coupon's
- *   `maxDiscountAmount` to percentage discounts.
  * @returns {number}
  */
-export function couponDiscountFor(coupon, subtotal, { capped = false } = {}) {
+export function couponDiscountFor(coupon, subtotal) {
   if (!coupon) return 0;
   if (coupon.minOrderAmount && subtotal < coupon.minOrderAmount) {
     return 0;
   }
   if (coupon.discountType === "percent") {
     const pct = (subtotal * coupon.discountValue) / 100;
-    return capped && coupon.maxDiscountAmount
+    return coupon.maxDiscountAmount
       ? Math.min(pct, coupon.maxDiscountAmount)
       : pct;
   }
