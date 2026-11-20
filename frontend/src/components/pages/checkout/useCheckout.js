@@ -19,6 +19,9 @@ import { useCheckoutCoupon } from "./useCheckoutCoupon";
 const requestCheckoutSubmit = () =>
   document.getElementById(CHECKOUT_FORM_ID)?.requestSubmit();
 
+/** How long "Pay Now" stays disabled while the browser leaves for PayU. */
+const PAYU_REDIRECT_GRACE_MS = 20000;
+
 /**
  * Post the PayU payment fields through a hidden form, leaving the page.
  * @param {{action: string, fields: Record<string, *>}} payment
@@ -136,8 +139,11 @@ export function useCheckout({ cart, products, currentUser, shippingOption, onCom
         try {
           saveLastOrder(checkout.order);
         } catch {}
-        leavingForPayu = true;
         submitPayuForm(checkout.payment);
+        leavingForPayu = true;
+        // If the browser never leaves (navigation stopped or blocked), let the
+        // customer try again after a grace period instead of staying stuck.
+        window.setTimeout(() => setSubmitting(false), PAYU_REDIRECT_GRACE_MS);
         return;
       }
       const order = await createOrder(orderPayload);
