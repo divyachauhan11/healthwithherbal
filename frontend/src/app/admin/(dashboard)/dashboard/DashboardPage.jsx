@@ -8,6 +8,9 @@ import {
 } from "@/components/admin/dashboard";
 import { OrderTable } from "@/components/admin/tables";
 
+/**
+ * Dashboard page: store stats, sales charts, recent orders and the low-stock alert.
+ */
 export default function DashboardPage({ dashboard = {}, stats = {}, onNavigate, onRefresh }) {
   const activeProductCount = stats.activeProducts ?? 0;
 

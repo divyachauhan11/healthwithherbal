@@ -2,6 +2,9 @@ import { Plus } from "lucide-react";
 import { SearchField, FormModal } from "@/components/admin/global";
 import { CouponTable } from "@/components/admin/tables";
 
+/**
+ * Coupons page: search, add button, coupon table and coupon form.
+ */
 export default function CouponsPage({
   rows,
   query,
