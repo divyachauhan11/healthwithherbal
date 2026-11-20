@@ -1,30 +1,18 @@
 import { CalendarDays, Check } from "lucide-react";
+import { ProfileInfoRow } from "./ProfileInfoRow";
+import { formatMemberSince } from "./profile-utils";
 
-const dateText = (value) =>
-  value
-    ? new Date(value).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-      })
-    : "—";
-
+/**
+ * Account information card: role, status, member-since date, page access and session note.
+ * @param {{profile: object, roleLabel: string}} props
+ */
 export function ProfileAccountInfo({ profile, roleLabel }) {
   return (
     <aside className="admin-profile-info-card">
       <h3>Account information</h3>
-      <div className="admin-profile-info-row">
-        <span>Account type</span>
-        <b>{roleLabel}</b>
-      </div>
-      <div className="admin-profile-info-row">
-        <span>Account status</span>
-        <b className="admin-profile-active"><i /> Active</b>
-      </div>
-      <div className="admin-profile-info-row">
-        <span>Member since</span>
-        <b><CalendarDays size={14} /> {dateText(profile.createdAt)}</b>
-      </div>
+      <ProfileInfoRow label="Account type">{roleLabel}</ProfileInfoRow>
+      <ProfileInfoRow label="Account status" valueClassName="admin-profile-active"><i /> Active</ProfileInfoRow>
+      <ProfileInfoRow label="Member since"><CalendarDays size={14} /> {formatMemberSince(profile.createdAt)}</ProfileInfoRow>
       <div className="admin-profile-access">
         <span>Page access</span>
         <p>
