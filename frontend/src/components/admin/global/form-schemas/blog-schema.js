@@ -109,14 +109,21 @@ export function buildBlogSchema({ isEditing }) {
 }
 
 /**
- * Split comma-separated tags into a list (mutates `payload`).
+ * Split comma-separated tags into a list and, when editing, keep the post's
+ * comments setting (mutates `payload`). The form has no comments switch and
+ * the API turns comments on when the field is missing, so editing a post with
+ * comments disabled used to re-enable them.
  * @param {object} payload
+ * @param {object|null} [initial] Post being edited, if any.
  */
-export function normalizeBlogPayload(payload) {
+export function normalizeBlogPayload(payload, initial) {
   if (typeof payload.tags === "string") {
     payload.tags = payload.tags
       .split(",")
       .map((t) => t.trim())
       .filter(Boolean);
+  }
+  if (payload.allowComments === undefined && typeof initial?.allowComments === "boolean") {
+    payload.allowComments = initial.allowComments;
   }
 }

@@ -72,7 +72,7 @@ export function normalizeEntityPayload(entity, payload, initial) {
       normalizeCouponPayload(payload);
       break;
     case "blog":
-      normalizeBlogPayload(payload);
+      normalizeBlogPayload(payload, initial);
       break;
     case "product":
       normalizeProductPayload(payload);
