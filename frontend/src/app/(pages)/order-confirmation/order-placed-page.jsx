@@ -85,6 +85,7 @@ export function OrderPlacedPage({
           />
           <OrderPaymentMethodCard
             paymentMethod={displayOrder.paymentMethod}
+            paymentStatus={displayOrder.paymentStatus}
             total={displayOrder.total}
           />
           {displayOrder.trackingId && (
