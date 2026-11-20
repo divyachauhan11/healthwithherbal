@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { Settings, Plus, Trash2, Save, Megaphone, Pencil, X, Tags, RotateCcw } from "lucide-react";
-import { adminRequest } from "@/lib/admin-api";
+import {
+  fetchAdminAnnouncements,
+  fetchAdminFeaturedCategories,
+  fetchAdminReturnExchangeSetting,
+  saveAdminAnnouncements,
+  saveAdminFeaturedCategories,
+  saveAdminReturnExchangeSetting,
+} from "@/lib/admin-api";
 import { DataTable } from "@/components/admin/tables";
 import { DashboardPanel } from "@/components/admin/dashboard";
 import { ConfirmModal } from "@/components/pages/modals/ConfirmModal";
@@ -28,7 +35,7 @@ export default function SettingsPage({ token, user }) {
 
   useEffect(() => {
     let active = true;
-    adminRequest("/settings/return-exchange", { token })
+    fetchAdminReturnExchangeSetting(token)
       .then((data) => { if (active) setReturnExchangeEnabled(data.enabled !== false); })
       .catch((error) => { if (active) setReturnExchangeMessage(error.message || "Could not load this setting."); })
       .finally(() => { if (active) setLoadingReturnExchange(false); });
@@ -39,7 +46,7 @@ export default function SettingsPage({ token, user }) {
     setSavingReturnExchange(true);
     setReturnExchangeMessage("");
     try {
-      const data = await adminRequest("/settings/return-exchange", { token, method: "PUT", body: { enabled } });
+      const data = await saveAdminReturnExchangeSetting(enabled, token);
       setReturnExchangeEnabled(data.enabled);
       setReturnExchangeMessage(data.enabled
         ? "Online return and exchange requests are enabled."
@@ -51,7 +58,7 @@ export default function SettingsPage({ token, user }) {
 
   useEffect(() => {
     let active = true;
-    adminRequest("/settings/announcements", { token })
+    fetchAdminAnnouncements(token)
       .then((data) => {
         if (active) setAnnouncements(Array.isArray(data.announcements) ? data.announcements : []);
       })
@@ -64,7 +71,7 @@ export default function SettingsPage({ token, user }) {
 
   useEffect(() => {
     let active = true;
-    adminRequest("/settings/featured-categories", { token })
+    fetchAdminFeaturedCategories(token)
       .then((data) => {
         if (!active) return;
         setParentCategories(Array.isArray(data.categories) ? data.categories : []);
@@ -89,11 +96,7 @@ export default function SettingsPage({ token, user }) {
     setSavingFeaturedCategories(true);
     setFeaturedCategoryMessage("");
     try {
-      const data = await adminRequest("/settings/featured-categories", {
-        token,
-        method: "PUT",
-        body: { categoryIds: featuredCategoryIds },
-      });
+      const data = await saveAdminFeaturedCategories({ categoryIds: featuredCategoryIds }, token);
       setFeaturedCategoryIds(Array.isArray(data.selectedIds) ? data.selectedIds.map(String) : []);
       setFeaturedCategoryMessage("Homepage categories saved and published.");
     } catch (error) {
@@ -107,11 +110,7 @@ export default function SettingsPage({ token, user }) {
     setSavingAnnouncements(true);
     setAnnouncementMessage("");
     try {
-      const data = await adminRequest("/settings/announcements", {
-        token,
-        method: "PUT",
-        body: { announcements: nextAnnouncements },
-      });
+      const data = await saveAdminAnnouncements({ announcements: nextAnnouncements }, token);
       setAnnouncements(data.announcements || []);
       setAnnouncementMessage("Announcements saved and published to the storefront.");
       setEditingAnnouncement(null);

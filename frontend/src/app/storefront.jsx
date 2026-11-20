@@ -1,5 +1,17 @@
 "use client";
-import { clearCustomerSession, getCartSessionId, getCustomerSession, saveCustomerSession } from "@/lib/session";
+import {
+  clearCustomerSession,
+  clearLegacyWishlist,
+  getCachedStoreData,
+  getCartSessionId,
+  getCustomerSession,
+  getStoredCart,
+  hasStoredCart,
+  saveCachedStoreData,
+  saveCustomerSession,
+  saveLastOrder,
+  saveStoredCart,
+} from "@/lib/session";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowLeft, Check } from "lucide-react";
@@ -116,7 +128,7 @@ export default function App() {
     cartRef.current = nextCart;
     setCart(nextCart);
     try {
-      localStorage.setItem("hwh_cart", JSON.stringify(nextCart));
+      saveStoredCart(nextCart);
     } catch (error) {
       console.warn("Could not save local cart:", error);
     }
@@ -125,7 +137,7 @@ export default function App() {
   useEffect(() => {
     try {
       const { user: stored, token } = getCustomerSession();
-      localStorage.removeItem("hwh_wishlist");
+      clearLegacyWishlist();
       if (stored && token) {
         setCurrentUser(JSON.parse(stored));
       } else {
@@ -208,7 +220,7 @@ export default function App() {
     let active = true;
     let hasCachedCatalog = false;
     try {
-      const cachedCatalog = JSON.parse(localStorage.getItem("hwh_store_init") || "null");
+      const cachedCatalog = getCachedStoreData();
       if (cachedCatalog && Array.isArray(cachedCatalog.products)) {
         setStoreData(normalizeStoreData(cachedCatalog));
         hasCachedCatalog = true;
@@ -223,7 +235,7 @@ export default function App() {
         const freshCatalog = normalizeStoreData(data);
         setStoreData(freshCatalog);
         try {
-          localStorage.setItem("hwh_store_init", JSON.stringify(freshCatalog));
+          saveCachedStoreData(freshCatalog);
         } catch (error) {
           console.warn("Could not cache store data:", error);
         }
@@ -322,10 +334,10 @@ export default function App() {
 
     const queryCart = new URLSearchParams(window.location.search).get("cart");
     const queryIds = queryCart ? normalizeIds(queryCart.split(",")) : [];
-    const hasLocalCart = localStorage.getItem("hwh_cart") !== null;
+    const hasLocalCart = hasStoredCart();
     let localIds = [];
     try {
-      localIds = normalizeIds(JSON.parse(localStorage.getItem("hwh_cart") || "[]"));
+      localIds = normalizeIds(getStoredCart());
     } catch (error) {
       console.warn("Could not restore local cart:", error);
     }
@@ -590,7 +602,7 @@ export default function App() {
             updateCart([]);
             setPlacedOrder(order);
             try {
-              localStorage.setItem("hwh_last_order", JSON.stringify(order));
+              saveLastOrder(order);
             } catch (e) {}
             navigate("order-placed");
             notify(`Order ${order.orderNumber} placed successfully!`);

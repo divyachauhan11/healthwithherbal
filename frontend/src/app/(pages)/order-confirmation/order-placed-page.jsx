@@ -25,6 +25,8 @@ import {
   fetchOrderDetails,
   getOrderLiveStreamUrl,
 } from "@/lib/api";
+import { clearStoredCart, getLastOrder, saveLastOrder } from "@/lib/session";
+import { subscribeToOrderStatusUpdates } from "@/lib/order-status-sync";
 import { ProductReviewModal } from "@/components/pages/modals";
 import {
   ORDER_STATUSES,
@@ -213,11 +215,11 @@ export function OrderPlacedPage({
         if (fresh.paymentStatus === "paid") {
           window.setTimeout(() => window.dispatchEvent(new Event("hwh-payment-order-complete")), 0);
           try {
-            localStorage.removeItem("hwh_cart");
+            clearStoredCart();
           } catch {}
         }
         try {
-          localStorage.setItem("hwh_last_order", JSON.stringify(fresh));
+          saveLastOrder(fresh);
         } catch {}
       })
       .catch((error) => {
@@ -254,9 +256,9 @@ export function OrderPlacedPage({
   useEffect(() => {
     if (!detailMode && !order && typeof window !== "undefined") {
       try {
-        const saved = localStorage.getItem("hwh_last_order");
+        const saved = getLastOrder();
         if (saved) {
-          setCachedOrder(JSON.parse(saved));
+          setCachedOrder(saved);
         }
       } catch (e) {}
     }
@@ -286,7 +288,10 @@ export function OrderPlacedPage({
           setLiveOrderData((prev) => ({ ...(prev || {}), ...fresh }));
         }
       })
-      .catch(() => {});
+      .catch((error) => {
+        // The SSE stream and polling below keep retrying; the page shows the cached order meanwhile.
+        if (isMounted) console.warn("Could not refresh the order status:", error.message);
+      });
 
     // 2. Connect to real-time Server-Sent Events (SSE) stream
     let eventSource = null;
@@ -309,56 +314,25 @@ export function OrderPlacedPage({
       }
     } catch {}
 
-    // 3. Listen to instant cross-tab BroadcastChannel from admin
-    let bc = null;
-    try {
-      if (typeof BroadcastChannel !== "undefined") {
-        bc = new BroadcastChannel("hwh_order_status");
-        bc.onmessage = (e) => {
-          const { id, status } = e.data || {};
-          if (
-            isMounted &&
-            status &&
-            (id === targetOrderId ||
-              id === targetOrderNumber ||
-              id === displayOrder?.orderNumber ||
-              id === displayOrder?._id)
-          ) {
-            setLiveOrderData((prev) => ({
-              ...(prev || {}),
-              status,
-              updatedAt: new Date().toISOString(),
-            }));
-          }
-        };
+    // 3. Apply status changes the admin portal broadcasts from another tab
+    const unsubscribeStatusUpdates = subscribeToOrderStatusUpdates(({ id, status }) => {
+      if (
+        isMounted &&
+        status &&
+        (id === targetOrderId ||
+          id === targetOrderNumber ||
+          id === displayOrder?.orderNumber ||
+          id === displayOrder?._id)
+      ) {
+        setLiveOrderData((prev) => ({
+          ...(prev || {}),
+          status,
+          updatedAt: new Date().toISOString(),
+        }));
       }
-    } catch {}
+    });
 
-    // 4. Listen to storage events for cross-window synchronization
-    const handleStorage = (e) => {
-      if (e.key === "hwh_order_status_update" && e.newValue) {
-        try {
-          const { id, status } = JSON.parse(e.newValue);
-          if (
-            isMounted &&
-            status &&
-            (id === targetOrderId ||
-              id === targetOrderNumber ||
-              id === displayOrder?.orderNumber ||
-              id === displayOrder?._id)
-          ) {
-            setLiveOrderData((prev) => ({
-              ...(prev || {}),
-              status,
-              updatedAt: new Date().toISOString(),
-            }));
-          }
-        } catch {}
-      }
-    };
-    window.addEventListener("storage", handleStorage);
-
-    // 5. Polling fallback every 3.5 seconds
+    // 4. Polling fallback every 3.5 seconds
     const intervalId = setInterval(async () => {
       try {
         const fresh = await fetchOrderDetails(identifier);
@@ -371,8 +345,7 @@ export function OrderPlacedPage({
     return () => {
       isMounted = false;
       eventSource?.close();
-      bc?.close();
-      window.removeEventListener("storage", handleStorage);
+      unsubscribeStatusUpdates();
       clearInterval(intervalId);
     };
   }, [rawOrder?.orderNumber, rawOrder?._id]);

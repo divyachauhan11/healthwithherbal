@@ -17,6 +17,7 @@ import {
   uploadReturnExchangePhotos,
 } from "@/lib/api";
 import { ProductReviewModal, ConfirmModal } from "@/components/pages/modals";
+import { subscribeToOrderStatusUpdates } from "@/lib/order-status-sync";
 import {
   AccountAddressCard,
   AccountLoadingState,
@@ -164,45 +165,19 @@ export function AccountPage({
   }, [currentUser?.phone, currentUser?.email, currentUser?._id]);
 
   // Real-time synchronization for order status updates from admin
-  useEffect(() => {
-    let bc = null;
-    try {
-      if (typeof BroadcastChannel !== "undefined") {
-        bc = new BroadcastChannel("hwh_order_status");
-        bc.onmessage = (e) => {
-          const { id, status } = e.data || {};
-          if (id && status) {
-            setOrders((prev) =>
-              prev.map((o) =>
-                o._id === id || o.orderNumber === id ? { ...o, status } : o,
-              ),
-            );
-          }
-        };
-      }
-    } catch {}
-
-    const handleStorage = (e) => {
-      if (e.key === "hwh_order_status_update" && e.newValue) {
-        try {
-          const { id, status } = JSON.parse(e.newValue);
-          if (id && status) {
-            setOrders((prev) =>
-              prev.map((o) =>
-                o._id === id || o.orderNumber === id ? { ...o, status } : o,
-              ),
-            );
-          }
-        } catch {}
-      }
-    };
-    window.addEventListener("storage", handleStorage);
-
-    return () => {
-      bc?.close();
-      window.removeEventListener("storage", handleStorage);
-    };
-  }, []);
+  useEffect(
+    () =>
+      subscribeToOrderStatusUpdates(({ id, status }) => {
+        if (id && status) {
+          setOrders((prev) =>
+            prev.map((o) =>
+              o._id === id || o.orderNumber === id ? { ...o, status } : o,
+            ),
+          );
+        }
+      }),
+    [],
+  );
 
   // Handle saving new or updated address via modal
   const handleSaveAddress = async (formData) => {

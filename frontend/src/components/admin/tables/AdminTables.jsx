@@ -16,10 +16,10 @@ import {
   X,
   ShoppingBag,
 } from "lucide-react";
-import { adminRequest } from "@/lib/admin-api";
+import { deleteAdminReview, updateAdminOrderStatus, updateAdminReview } from "@/lib/admin-api";
+import { publishOrderStatusUpdate } from "@/lib/order-status-sync";
 import { classStatus, currency, dateLabel, dateLabelLong, dateTimeLabel } from "../global/admin-utils";
 import { ORDER_STATUSES, REVIEW_STATUSES } from "../../../constants/statuses";
-import { getAdminSessionToken } from "../../../lib/session";
 import { DataTable } from "./DataTable";
 import { TablePagination, useTablePagination } from "./TablePagination";
 import { DeleteConfirmationModal } from "../global/DeleteConfirmationModal";
@@ -390,25 +390,9 @@ export function OrderTable({
   const [selectedOrder, setSelectedOrder] = useState(null);
   const updateStatus = async (id, status) => {
     try {
-      await adminRequest(`/orders/${id}`, {
-        token: getAdminSessionToken(),
-        method: "PATCH",
-        body: { status },
-      });
-      // Broadcast real-time event to open storefront tabs and customer windows
-      if (typeof window !== "undefined") {
-        try {
-          const bc = new BroadcastChannel("hwh_order_status");
-          bc.postMessage({ id, status, timestamp: Date.now() });
-          bc.close();
-        } catch {}
-        try {
-          localStorage.setItem(
-            "hwh_order_status_update",
-            JSON.stringify({ id, status, timestamp: Date.now() }),
-          );
-        } catch {}
-      }
+      await updateAdminOrderStatus(id, status);
+      // Update open storefront tabs and customer windows immediately.
+      publishOrderStatusUpdate(id, status);
       onStatus?.();
     } catch (error) {
       window.alert(error.message);
@@ -834,14 +818,14 @@ export function ReviewTable({
 
   const action = async (review, isApproved, status) => {
     try {
-      await adminRequest(`/reviews/${review._id}`, {
-        token,
-        method: "PATCH",
-        body: {
+      await updateAdminReview(
+        review._id,
+        {
           isApproved,
           status: status || (isApproved ? REVIEW_STATUSES[1] : REVIEW_STATUSES[2]),
         },
-      });
+        token,
+      );
       onChange?.();
       notify(
         isApproved
@@ -858,10 +842,7 @@ export function ReviewTable({
     if (!internalDeleteReview) return;
     setBusy(true);
     try {
-      await adminRequest(`/reviews/${internalDeleteReview._id}`, {
-        token,
-        method: "DELETE",
-      });
+      await deleteAdminReview(internalDeleteReview._id, token);
       onChange?.();
       notify("Review deleted.", "success");
       setInternalDeleteReview(null);

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { Check, Eye, EyeOff, KeyRound, LoaderCircle } from "lucide-react";
-import { apiPost } from "@/lib/api-client";
+import { resetAdminPassword } from "@/lib/admin-api";
 import { FormField } from "@/components/shared/FormField";
 import "./theme.css";
 
@@ -30,7 +30,7 @@ export default function ResetPasswordForm({ token = "", email = "" }) {
     setError("");
     setStatus("loading");
     try {
-      await apiPost("/admin/auth/reset-password", { email, token, password });
+      await resetAdminPassword({ email, token, password });
       setStatus("success");
       setPassword("");
       setConfirmPassword("");

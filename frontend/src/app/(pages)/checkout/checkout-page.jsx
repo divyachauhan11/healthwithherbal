@@ -25,6 +25,7 @@ import {
   deleteUserAddress,
   updateUserAddress,
 } from "@/lib/api";
+import { saveLastOrder } from "@/lib/session";
 
 function SavedAddressCard({
   address,
@@ -734,7 +735,7 @@ export function CheckoutPage({
                 if (selectedPaymentMethod === "payu") {
                   const checkout = await createPayuCheckout(orderPayload);
                   try {
-                    localStorage.setItem("hwh_last_order", JSON.stringify(checkout.order));
+                    saveLastOrder(checkout.order);
                   } catch {}
                   const form = document.createElement("form");
                   form.method = "POST";

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { ArrowLeft, Eye, EyeOff, Loader2, RefreshCw } from "lucide-react";
-import { adminRequest } from "@/lib/admin-api";
+import { updateAdminProductStock } from "@/lib/admin-api";
 import { DashboardPanel } from "@/components/admin/dashboard";
 import {
   FormModal,
@@ -75,11 +75,7 @@ export default function LowStockPage({
   const updateStockQuantity = async ({ productId, quantity, reason, onSuccess }) => {
     setRestockingId(productId);
     try {
-      await adminRequest(`/products/${productId}/stock`, {
-        method: "PATCH",
-        token,
-        body: { stockQty: quantity, reason },
-      });
+      await updateAdminProductStock(productId, { stockQty: quantity, reason }, token);
       onSuccess?.();
       onRefresh?.();
     } catch (error) {

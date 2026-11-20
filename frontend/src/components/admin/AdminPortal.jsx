@@ -2,7 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Check, X } from "lucide-react";
-import { adminRequest } from "../../lib/admin-api";
+import {
+  ADMIN_SESSION_INVALID_EVENT,
+  createAdminUser,
+  deleteAdminRecord,
+  fetchAdminCatalog,
+  fetchAdminDashboard,
+  fetchAdminNotifications,
+  fetchAdminPageData,
+  fetchAdminSession,
+  isAdminSessionError,
+  loginAdmin,
+  saveAdminRecord,
+  setAdminProductActive,
+  updateAdminUser,
+} from "../../lib/admin-api";
+import { API_ERROR_CODES } from "../../lib/api-client";
 import {
   ADMIN_PAGE_DESCRIPTIONS,
   ADMIN_PAGE_IDS,
@@ -10,9 +25,13 @@ import {
 } from "../../constants/admin-pages";
 import { RETURN_EXCHANGE_STATUSES } from "../../constants/statuses";
 import {
+  clearAdminPortalState,
   clearAdminSession,
   getAdminSessionToken,
   getAdminUser,
+  getStoredAdminPage,
+  getStoredAdminQuery,
+  saveAdminPortalState,
   saveAdminSession,
   saveAdminUser,
 } from "../../lib/session";
@@ -65,8 +84,9 @@ const getLoginErrorMessage = (error) => {
       ? error.message
       : "The sign-in service had a problem. Please try again in a moment.";
   }
-  if (error?.code === "INVALID_JSON") return "The sign-in service returned an unexpected response. Please try again or contact your administrator.";
-  if (error instanceof TypeError || /fetch failed|failed to fetch|network|load failed|connection/i.test(error?.message || "")) {
+  if (error?.code === API_ERROR_CODES.INVALID_JSON) return "The sign-in service returned an unexpected response. Please try again or contact your administrator.";
+  if (error?.code === API_ERROR_CODES.TIMEOUT) return error.message;
+  if (error?.code === API_ERROR_CODES.NETWORK_ERROR || error instanceof TypeError || /fetch failed|failed to fetch|network|load failed|connection/i.test(error?.message || "")) {
     return "Could not reach the sign-in service. Check your connection and try again.";
   }
   return error?.message || "Could not sign in. Please check your details and try again.";
@@ -93,7 +113,7 @@ export default function AdminPortal() {
       const validParam = getValidPageName(paramPage);
       if (validParam) return validParam;
 
-      const saved = window.localStorage.getItem("hwh-admin-page");
+      const saved = getStoredAdminPage();
       const validSaved = getValidPageName(saved);
       if (validSaved) return validSaved;
     } catch {
@@ -109,7 +129,7 @@ export default function AdminPortal() {
       return (
         params.get("q") ||
         params.get("query") ||
-        window.localStorage.getItem("hwh-admin-query") ||
+        getStoredAdminQuery() ||
         ""
       );
     } catch {
@@ -166,8 +186,8 @@ export default function AdminPortal() {
       setSessionCheckError("");
       setLoginError(event.detail?.message || "Your admin session is no longer valid. Please sign in again.");
     };
-    window.addEventListener("hwh-admin-session-invalid", handleInvalidSession);
-    return () => window.removeEventListener("hwh-admin-session-invalid", handleInvalidSession);
+    window.addEventListener(ADMIN_SESSION_INVALID_EVENT, handleInvalidSession);
+    return () => window.removeEventListener(ADMIN_SESSION_INVALID_EVENT, handleInvalidSession);
   }, []);
 
   useEffect(() => {
@@ -178,7 +198,7 @@ export default function AdminPortal() {
     let hasValidatedSession = false;
     const refreshStaffAccess = async () => {
       try {
-        const result = await adminRequest("/auth/session", { token });
+        const result = await fetchAdminSession(token);
         if (!active) return;
         if (!result?.user) throw new Error("The admin session service did not return a valid user.");
         setUser(result.user);
@@ -215,8 +235,8 @@ export default function AdminPortal() {
     const refresh = async () => {
       if (active) setNotificationsLoading(true);
       try {
-        const result = await adminRequest("/notifications", { token });
-        if (active) setNotifications(Array.isArray(result.items) ? result.items : []);
+        const items = await fetchAdminNotifications(token);
+        if (active) setNotifications(items);
       } catch (error) {
         if (active) console.warn("Could not load admin notifications:", error.message);
       } finally {
@@ -255,21 +275,13 @@ export default function AdminPortal() {
         setLoading(false);
         return;
       }
-      let route =
-        target === "Dashboard"
-          ? "/dashboard"
-          : target === "Low Stock"
-            ? "/low-stock"
-            : target === "Returns & Exchanges"
-              ? "/return-exchange"
-            : `/${target.toLowerCase()}`;
-      if (target === "Products" && productCategoryScope?.id) {
-        route += `?parentCategoryId=${encodeURIComponent(productCategoryScope.id)}`;
-      }
-      const result = await adminRequest(route, { token: activeToken });
+      const pageData = await fetchAdminPageData(target, {
+        token: activeToken,
+        parentCategoryId: productCategoryScope?.id,
+      });
       setData((current) => ({
         ...current,
-        [target]: result.stats ? result : result.items || [],
+        [target]: pageData,
       }));
       if ([
         ADMIN_PAGE_IDS.PRODUCTS,
@@ -277,31 +289,23 @@ export default function AdminPortal() {
         ADMIN_PAGE_IDS.BRANDS,
         ADMIN_PAGE_IDS.LOW_STOCK,
       ].includes(target)) {
-        const [brands, categories] = await Promise.all([
-          adminRequest("/brands", { token: activeToken }),
-          adminRequest("/categories", { token: activeToken }),
-        ]);
-        setCatalog({
-          brands: brands.items || [],
-          categories: categories.items || [],
-        });
+        setCatalog(await fetchAdminCatalog(activeToken));
       }
       if (target !== "Dashboard" && !data.Dashboard) {
-        adminRequest("/dashboard", { token: activeToken })
+        fetchAdminDashboard(activeToken)
           .then((dashResult) => {
             setData((cur) => ({
               ...cur,
               Dashboard: dashResult,
             }));
           })
-          .catch(() => {});
+          .catch((error) => {
+            // The dashboard is prefetched for header stats; the page itself still works.
+            console.warn("Could not prefetch dashboard stats:", error.message);
+          });
       }
     } catch (error) {
-      if (
-        error.status === 401 ||
-        String(error.message || "").toLowerCase().includes("session") ||
-        String(error.message || "").toLowerCase().includes("sign in")
-      ) {
+      if (isAdminSessionError(error)) {
         clearStoredAdminSession();
         setToken("");
         setUser(null);
@@ -321,12 +325,7 @@ export default function AdminPortal() {
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
-      window.localStorage.setItem("hwh-admin-page", page);
-      if (query.trim()) {
-        window.localStorage.setItem("hwh-admin-query", query.trim());
-      } else {
-        window.localStorage.removeItem("hwh-admin-query");
-      }
+      saveAdminPortalState(page, query.trim());
 
       const params = new URLSearchParams(window.location.search);
       const slugPage = normalizePageKey(page);
@@ -372,12 +371,9 @@ export default function AdminPortal() {
     setLoginError("");
     try {
       const formData = new FormData(event.currentTarget);
-      const result = await adminRequest("/auth/login", {
-        method: "POST",
-        body: {
-          email: String(formData.get("email") || "").trim().toLowerCase(),
-          password: formData.get("password"),
-        },
+      const result = await loginAdmin({
+        email: String(formData.get("email") || "").trim().toLowerCase(),
+        password: formData.get("password"),
       });
       if (!result?.token || !result?.user || !result.user.role) {
         throw new Error("The sign-in service did not return a valid admin session. Please try again.");
@@ -411,12 +407,7 @@ export default function AdminPortal() {
     setBusy(true);
     try {
       const kind = form.kind;
-      const route = `/${kind}${form.item?._id ? `/${form.item._id}` : ""}`;
-      const result = await adminRequest(route, {
-        token,
-        method: form.item?._id ? "PUT" : "POST",
-        body,
-      });
+      const result = await saveAdminRecord(kind, form.item?._id, body, token);
       setForm(null);
       await load(page);
       notify(`${kind.slice(0, -1)} saved successfully.`);
@@ -431,7 +422,7 @@ export default function AdminPortal() {
   const createStaffUser = async (body) => {
     setBusy(true);
     try {
-      await adminRequest("/users", { token, method: "POST", body });
+      await createAdminUser(body, token);
       await load("Users");
       notify("User created successfully.");
       return true;
@@ -446,7 +437,7 @@ export default function AdminPortal() {
   const updateStaffUser = async (id, body) => {
     setBusy(true);
     try {
-      await adminRequest(`/users/${id}`, { token, method: "PUT", body });
+      await updateAdminUser(id, body, token);
       await load("Users");
       notify("User updated successfully.");
       return true;
@@ -477,7 +468,7 @@ export default function AdminPortal() {
     if (!kind || !item?._id) return;
     setDeleteModal((prev) => ({ ...prev, busy: true }));
     try {
-      await adminRequest(`/${kind}/${item._id}`, { token, method: "DELETE" });
+      await deleteAdminRecord(kind, item._id, token);
       await load(page);
       notify(
         `${item.name || item.title || item.code || "Record"} removed successfully.`,
@@ -524,11 +515,7 @@ export default function AdminPortal() {
     });
 
     try {
-      await adminRequest(`/products/${product._id}/toggle-active`, {
-        token,
-        method: "PATCH",
-        body: { active: nextActive },
-      });
+      await setAdminProductActive(product._id, nextActive, token);
       notify(
         nextActive
           ? `"${product.title || "Product"}" is now unhidden and visible in the store.`
@@ -600,8 +587,7 @@ export default function AdminPortal() {
   const logout = () => {
     clearStoredAdminSession();
     try {
-      window.localStorage.removeItem("hwh-admin-page");
-      window.localStorage.removeItem("hwh-admin-query");
+      clearAdminPortalState();
     } catch {
       // The local session is also cleared from memory below.
     }
@@ -761,8 +747,8 @@ export default function AdminPortal() {
           onRefreshNotifications={() => {
             if (!token) return;
             setNotificationsLoading(true);
-            adminRequest("/notifications", { token })
-              .then((result) => setNotifications(Array.isArray(result.items) ? result.items : []))
+            fetchAdminNotifications(token)
+              .then(setNotifications)
               .catch((error) => console.warn("Could not refresh admin notifications:", error.message))
               .finally(() => setNotificationsLoading(false));
           }}

@@ -12,7 +12,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { adminRequest } from "@/lib/admin-api";
+import { fetchAdminCustomerDetail } from "@/lib/admin-api";
 import { ORDER_STATUSES, PAYMENT_STATUSES } from "@/constants/statuses";
 import { useAsyncResource } from "@/hooks";
 
@@ -53,7 +53,7 @@ const addressText = (address) => {
 
 export default function CustomerDetailsModal({ customer: listCustomer, token, onClose }) {
   const loadCustomer = useCallback(
-    () => adminRequest(`/customers/detail/${encodeURIComponent(listCustomer.email)}`, { token }),
+    () => fetchAdminCustomerDetail(listCustomer.email, token),
     [listCustomer.email, token],
   );
   const { data: details, loading, error } = useAsyncResource({

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { adminRequest, adminUploadRequest } from "@/lib/admin-api";
+import { adminUploadRequest, fetchAdminProfile, updateAdminProfile } from "@/lib/admin-api";
 import { useAsyncResource } from "@/hooks";
 import { ProfileAccountInfo } from "@/components/admin/profile/ProfileAccountInfo";
 import { ProfileDetailsForm } from "@/components/admin/profile/ProfileDetailsForm";
@@ -18,7 +18,7 @@ export default function ProfilePage({ user, token, onUserUpdated }) {
   const fileInputRef = useRef(null);
 
   const loadProfile = useCallback(
-    () => adminRequest("/profile", { token }).then(({ user: freshUser }) => freshUser),
+    () => fetchAdminProfile(token).then(({ user: freshUser }) => freshUser),
     [token],
   );
   const applyLoadedProfile = useCallback((freshUser) => {
@@ -72,11 +72,7 @@ export default function ProfilePage({ user, token, onUserUpdated }) {
         avatarFields = { avatarUrl: "", avatarPublicId: "" };
       }
 
-      const result = await adminRequest("/profile", {
-        token,
-        method: "PATCH",
-        body: { name, phone, ...avatarFields },
-      });
+      const result = await updateAdminProfile({ name, phone, ...avatarFields }, token);
       setProfile(result.user);
       setName(result.user.name || "");
       setPhone(result.user.phone || "");

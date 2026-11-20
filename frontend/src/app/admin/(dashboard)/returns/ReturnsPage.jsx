@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { ArrowUpRight, Banknote, CalendarDays, ClipboardList, ExternalLink, Package, RotateCcw, UserRound, X } from "lucide-react";
-import { adminRequest } from "@/lib/admin-api";
+import { updateAdminReturnRequest } from "@/lib/admin-api";
 import {
   REFUND_STATUSES,
   RETURN_EXCHANGE_STATUSES,
@@ -240,11 +240,11 @@ export default function ReturnsPage({
     if (!selected) return;
     setSaving(true);
     try {
-      await adminRequest(`/return-exchange/${selected._id}`, {
+      await updateAdminReturnRequest(
+        selected._id,
+        { status, adminNote, refundStatus, refundAmount, refundMethod, refundReference },
         token,
-        method: "PATCH",
-        body: { status, adminNote, refundStatus, refundAmount, refundMethod, refundReference },
-      });
+      );
       notify("Request updated successfully.");
       setSelected(null);
       onRefresh();

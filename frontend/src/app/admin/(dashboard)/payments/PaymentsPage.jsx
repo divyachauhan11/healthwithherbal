@@ -8,7 +8,7 @@ import { SearchField } from "@/components/admin/global";
 import { DataTable } from "@/components/admin/tables";
 import { currency, dateLabel, dateTimeLabel } from "@/components/admin/global/admin-utils";
 import { RowActionsMenu } from "@/components/admin/tables";
-import { adminRequest } from "@/lib/admin-api";
+import { updateAdminPayment } from "@/lib/admin-api";
 import { PAYMENT_STATUSES } from "@/constants/statuses";
 import { STATUS_BADGE_MAPS } from "@/constants/status-badges";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -121,10 +121,9 @@ export default function PaymentsPage({ rows = [], query = "", setQuery, token, n
     if (!payment || status === payment.status) return;
     setUpdatingPaymentId(payment._id);
     try {
-      await adminRequest(`/payments/${payment._id}`, {
-        token,
-        method: "PATCH",
-        body: {
+      await updateAdminPayment(
+        payment._id,
+        {
           method: payment.method || "unknown",
           gateway: payment.gateway || "",
           gatewayTxnId: payment.gatewayTxnId || "",
@@ -133,7 +132,8 @@ export default function PaymentsPage({ rows = [], query = "", setQuery, token, n
           status,
           paidAt: status === PAYMENT_STATUSES[2] ? payment.paidAt || new Date().toISOString() : payment.paidAt || null,
         },
-      });
+        token,
+      );
       notify?.("Payment status updated.");
       onRefresh?.();
     } catch (error) {

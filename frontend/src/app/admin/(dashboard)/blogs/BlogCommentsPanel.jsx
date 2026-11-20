@@ -2,7 +2,11 @@
 
 import { useCallback, useState } from "react";
 import { ArrowLeft, Check, Clock3, Trash2, X, CircleX } from "lucide-react";
-import { adminRequest } from "@/lib/admin-api";
+import {
+  deleteAdminBlogComment,
+  fetchAdminBlogComments,
+  updateAdminBlogCommentStatus,
+} from "@/lib/admin-api";
 import { BLOG_COMMENT_STATUSES } from "@/constants/statuses";
 import { STATUS_BADGE_MAPS } from "@/constants/status-badges";
 import { StatusBadge } from "@/components/shared/StatusBadge";
@@ -12,7 +16,7 @@ export default function BlogCommentsPanel({ blog, token, onBack, onChanged }) {
   const [busyId, setBusyId] = useState("");
   const [filter, setFilter] = useState("all");
   const loadComments = useCallback(
-    () => adminRequest(`/blogs/${encodeURIComponent(blog._id)}/comments`, { token })
+    () => fetchAdminBlogComments(blog._id, token)
       .then((result) => result.items || []),
     [blog._id, token],
   );
@@ -34,11 +38,7 @@ export default function BlogCommentsPanel({ blog, token, onBack, onChanged }) {
     setBusyId(comment._id);
     setError("");
     try {
-      const result = await adminRequest(`/blogs/${encodeURIComponent(blog._id)}/comments/${encodeURIComponent(comment._id)}`, {
-        token,
-        method: "PATCH",
-        body: { status },
-      });
+      const result = await updateAdminBlogCommentStatus(blog._id, comment._id, status, token);
       setItems((current) => current.map((item) => item._id === comment._id ? result.item : item));
       onChanged?.();
     } catch (requestError) {
@@ -53,10 +53,7 @@ export default function BlogCommentsPanel({ blog, token, onBack, onChanged }) {
     setBusyId(comment._id);
     setError("");
     try {
-      await adminRequest(`/blogs/${encodeURIComponent(blog._id)}/comments/${encodeURIComponent(comment._id)}`, {
-        token,
-        method: "DELETE",
-      });
+      await deleteAdminBlogComment(blog._id, comment._id, token);
       setItems((current) => current.filter((item) => item._id !== comment._id));
       onChanged?.();
     } catch (requestError) {
