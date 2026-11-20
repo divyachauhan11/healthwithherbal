@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import ForgotPasswordPage from "@/components/admin/auth/forgot-password/ForgotPasswordPage";
+import { ForgotPasswordPage } from "@/components/admin/auth/forgot-password/ForgotPasswordPage";
 import { requestAdminPasswordReset } from "@/lib/admin-api";
 
 export default function Page() {
