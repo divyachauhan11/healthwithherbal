@@ -53,16 +53,20 @@ export function getItemDetails(item, kind) {
     if (item.sku) badges.push(`SKU: ${item.sku}`);
     if (item.price != null) badges.push(currency(item.price));
     if (item.category) badges.push(item.category);
-    if (item.stock != null) badges.push(`${item.stock} in stock`);
+    const stock = item.stockQty ?? item.stock;
+    if (stock != null) badges.push(`${stock} in stock`);
   } else if (kind === "categories" || kind === "brands") {
     if (item.slug) badges.push(`/${item.slug}`);
     const count = item.productCount ?? item.count ?? 0;
     badges.push(`${count} product${count === 1 ? "" : "s"}`);
   } else if (kind === "coupons") {
     title = `Coupon: ${item.code || title}`;
-    if (item.discountPercent) badges.push(`${item.discountPercent}% OFF`);
-    else if (item.discount) badges.push(`${item.discount}% OFF`);
-    if (item.minSpend) badges.push(`Min: ${currency(item.minSpend)}`);
+    const percentOff = item.discountType === "percent"
+      ? item.discountValue
+      : item.discountPercent ?? item.discount;
+    if (percentOff) badges.push(`${percentOff}% OFF`);
+    const minSpend = item.minOrderAmount ?? item.minSpend;
+    if (minSpend) badges.push(`Min: ${currency(minSpend)}`);
   } else if (kind === "reviews") {
     title = item.productId?.title
       ? `Review for "${item.productId.title}"`
