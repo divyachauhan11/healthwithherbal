@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Plus, RefreshCw } from "lucide-react";
-import { SearchField, FormModal } from "@/components/admin/global";
+import { FormModal } from "@/components/admin/global";
 import { BlogTable } from "@/components/admin/tables";
+import { BlogCommentsModal, BlogManagerToolbar, useBlogCommentsDialog } from "@/components/admin/blogs";
 import BlogCommentsPanel from "./BlogCommentsPanel";
 
+/**
+ * Blogs page: article toolbar and table, the article form and the comment manager dialog.
+ */
 export default function BlogsPage({
   rows = [],
   query,
@@ -18,37 +20,17 @@ export default function BlogsPage({
   token,
   onRefresh,
 }) {
-  const [commentsBlog, setCommentsBlog] = useState(null);
-
-  useEffect(() => {
-    if (!commentsBlog) return undefined;
-    const closeOnEscape = (event) => {
-      if (event.key === "Escape") setCommentsBlog(null);
-    };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
-  }, [commentsBlog]);
+  const { commentsBlog, setCommentsBlog } = useBlogCommentsDialog();
 
   return (
     <section className="panel page-panel">
-      <div className="blog-manager-toolbar">
-        <SearchField
-          value={query}
-          onChange={setQuery}
-          placeholder="Search articles by title, category, author, or tag"
-        />
-        <div className="blog-manager-toolbar-actions">
-          <span className="blog-manager-total">Total posts: <strong>{rows.length}</strong></span>
-          <button type="button" className="blog-manager-refresh" onClick={() => onRefresh?.()}><RefreshCw size={15} /> Refresh</button>
-          <button
-            type="button"
-            className="primary"
-            onClick={() => setForm({ kind: "blogs", item: null })}
-          >
-            <Plus size={16} /> Create New Article
-          </button>
-        </div>
-      </div>
+      <BlogManagerToolbar
+        query={query}
+        setQuery={setQuery}
+        totalPosts={rows.length}
+        onRefresh={onRefresh}
+        onCreate={() => setForm({ kind: "blogs", item: null })}
+      />
 
       <BlogTable
         rows={rows}
@@ -67,28 +49,15 @@ export default function BlogsPage({
       />
 
       {commentsBlog && (
-        <div
-          className="blog-comments-modal-backdrop"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setCommentsBlog(null);
-          }}
-        >
-          <section
-            className="blog-comments-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={`Comments for ${commentsBlog.title}`}
-          >
-            <BlogCommentsPanel
-              blog={commentsBlog}
-              token={token}
-              onBack={() => setCommentsBlog(null)}
-              onChanged={onRefresh}
-            />
-          </section>
-        </div>
+        <BlogCommentsModal blog={commentsBlog} onClose={() => setCommentsBlog(null)}>
+          <BlogCommentsPanel
+            blog={commentsBlog}
+            token={token}
+            onBack={() => setCommentsBlog(null)}
+            onChanged={onRefresh}
+          />
+        </BlogCommentsModal>
       )}
     </section>
   );
 }
-
