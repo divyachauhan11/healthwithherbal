@@ -1,43 +1,25 @@
-import {
-  AlertTriangle,
-  BookOpen,
-  CreditCard,
-  FileText,
-  LayoutDashboard,
-  Package,
-  RotateCcw,
-  Settings,
-  Shield,
-  Star,
-  Tag,
-  Truck,
-  Users,
-  X,
-} from "lucide-react";
 import { ADMIN_PAGE_IDS } from "../../../constants/admin-pages";
+import { AdminSidebarBrand, AdminSidebarNavItem, getVisibleNavigation } from "./sidebar";
 
-const navigation = [
-  [ADMIN_PAGE_IDS.DASHBOARD, LayoutDashboard],
-  [ADMIN_PAGE_IDS.PRODUCTS, Package],
-  [ADMIN_PAGE_IDS.LOW_STOCK, AlertTriangle],
-  [ADMIN_PAGE_IDS.CATEGORIES, BookOpen],
-  [ADMIN_PAGE_IDS.BRANDS, Star],
-  [ADMIN_PAGE_IDS.COUPONS, Tag],
-  [ADMIN_PAGE_IDS.REVIEWS, Star],
-  [ADMIN_PAGE_IDS.ORDERS, Truck],
-  [ADMIN_PAGE_IDS.PAYMENTS, CreditCard],
-  [ADMIN_PAGE_IDS.RETURNS_EXCHANGES, RotateCcw],
-  [ADMIN_PAGE_IDS.CUSTOMERS, Users],
-  [ADMIN_PAGE_IDS.BLOGS, FileText],
-  [ADMIN_PAGE_IDS.USERS, Shield],
-  [ADMIN_PAGE_IDS.SETTINGS, Settings],
-  [ADMIN_PAGE_IDS.PROFILE, Users],
-];
-
+/**
+ * Admin navigation sidebar (slides in on mobile): logo and the pages the staff
+ * member may open, with pending order/return counts. Choosing a page clears
+ * the search and closes the mobile sidebar.
+ * @param {object} props
+ * @param {string} props.page Active page.
+ * @param {(page: string) => void} props.setPage
+ * @param {string} [props.query]
+ * @param {(query: string) => void} props.setQuery
+ * @param {boolean} props.sidebarOpen
+ * @param {(open: boolean) => void} props.setSidebarOpen
+ * @param {number} props.pendingOrders
+ * @param {number} [props.pendingReturns=0]
+ * @param {string[]} [props.allowedPages] Undefined shows every page.
+ * @param {boolean} [props.returnExchangeEnabled=true]
+ */
 export function AdminSidebar({
   page,
   setPage,
-  query,
   setQuery,
   sidebarOpen,
   setSidebarOpen,
@@ -46,86 +28,35 @@ export function AdminSidebar({
   allowedPages,
   returnExchangeEnabled = true,
 }) {
+  const openPage = (label) => {
+    setPage(label);
+    setQuery("");
+    setSidebarOpen(false);
+  };
+
   return (
     <aside className={sidebarOpen ? "sidebar open" : "sidebar"}>
-      <div className="brand admin-brand">
-        <div
-          className="admin-brand-wrap"
-          onClick={() => {
-            setPage(ADMIN_PAGE_IDS.DASHBOARD);
-            setQuery("");
-            setSidebarOpen(false);
-          }}
-          role="button"
-          tabIndex={0}
-          title="Health With Herbal - Admin Portal"
-        >
-          <div
-            className="admin-brand-logo-card"
-            style={{
-              height: "80px",
-              maxHeight: "80px",
-              width: "fit-content",
-              padding: "2px 6px",
-              boxSizing: "border-box",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <img
-              src="/health-with-herbal-logo-tight.png"
-              alt="Health With Herbal"
-              className="admin-brand-logo-img"
-              style={{
-                height: "70px",
-                maxHeight: "70px",
-                width: "auto",
-                maxWidth: "100%",
-                objectFit: "contain",
-                display: "block",
-              }}
-            />
-          </div>
-          <div className="admin-portal-badge">
-            <span>ADMIN PORTAL</span>
-          </div>
-        </div>
-        <button
-          className="mobile-close"
-          onClick={() => setSidebarOpen(false)}
-          aria-label="Close menu"
-        >
-          <X size={17} />
-        </button>
-      </div>
+      <AdminSidebarBrand
+        onHome={() => openPage(ADMIN_PAGE_IDS.DASHBOARD)}
+        onClose={() => setSidebarOpen(false)}
+      />
       <nav>
-        {navigation
-          .filter(
-            ([label]) =>
-              (label !== ADMIN_PAGE_IDS.RETURNS_EXCHANGES || returnExchangeEnabled) &&
-              (!allowedPages || allowedPages.includes(label)),
-          )
-          .map(([label, Icon]) => (
-            <button
-              key={label}
-              className={page === label ? "active" : ""}
-              onClick={() => {
-                setPage(label);
-                setQuery("");
-                setSidebarOpen(false);
-              }}
-            >
-              <Icon size={18} />
-              <span>{label}</span>
-              {label === ADMIN_PAGE_IDS.ORDERS && pendingOrders > 0 && (
-                <em>{pendingOrders}</em>
-              )}
-              {label === ADMIN_PAGE_IDS.RETURNS_EXCHANGES && pendingReturns > 0 && (
-                <em>{pendingReturns}</em>
-              )}
-            </button>
-          ))}
+        {getVisibleNavigation(allowedPages, returnExchangeEnabled).map(([label, Icon]) => (
+          <AdminSidebarNavItem
+            key={label}
+            label={label}
+            icon={Icon}
+            active={page === label}
+            badge={
+              label === ADMIN_PAGE_IDS.ORDERS
+                ? pendingOrders
+                : label === ADMIN_PAGE_IDS.RETURNS_EXCHANGES
+                  ? pendingReturns
+                  : 0
+            }
+            onSelect={() => openPage(label)}
+          />
+        ))}
       </nav>
     </aside>
   );

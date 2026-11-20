@@ -1,20 +1,19 @@
-import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Eye, EyeOff } from "lucide-react";
+import { ArrowRight } from "lucide-react";
+import { AdminLoginLogo, AdminPasswordField } from "./login";
 
+/**
+ * Admin sign-in screen.
+ * @param {object} props
+ * @param {(event: SubmitEvent) => void} props.onLogin Form submit handler (reads `email` and `password`).
+ * @param {boolean} props.busy Shows "Signing in…" and disables submit.
+ * @param {string} [props.error] Sign-in error message.
+ */
 export function Login({ onLogin, busy, error }) {
-  const [showPassword, setShowPassword] = useState(false);
-
   return (
     <main className="admin-login-wrap">
       <form className="admin-login" onSubmit={onLogin}>
-        <div className="admin-login-logo-card">
-          <img
-            src="/admin-login-logo-clean.png"
-            alt="Health With Herbal"
-            className="admin-login-logo-img"
-          />
-        </div>
+        <AdminLoginLogo />
         <span className="eyebrow">ADMIN PORTAL</span>
         <h1>Welcome back</h1>
         <p>Sign in to manage your store.</p>
@@ -29,27 +28,7 @@ export function Login({ onLogin, busy, error }) {
             required
           />
         </label>
-        <label>
-          Password
-          <span className="admin-login-password-field">
-            <input
-              name="password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
-              placeholder="Enter your password"
-              required
-            />
-            <button
-              type="button"
-              className="admin-login-password-toggle"
-              onClick={() => setShowPassword((visible) => !visible)}
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              aria-pressed={showPassword}
-            >
-              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-            </button>
-          </span>
-        </label>
+        <AdminPasswordField />
         <div className="admin-login-forgot-password">
           <Link href="/forgot-password">Forgot password?</Link>
         </div>
