@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { FormModal } from "@/components/admin/global/FormModal";
 import { newAddressDefaults } from "./account-utils";
 
@@ -14,11 +15,19 @@ import { newAddressDefaults } from "./account-utils";
  * @param {() => void} props.onClose Closes the dialog.
  */
 export function AddressFormModal({ isOpen, address, currentUser, isFirstAddress, busy, onSave, onClose }) {
+  // FormModal re-syncs its fields whenever `initial` changes, so the "add"
+  // defaults must keep their identity while the dialog is open; a new object
+  // per render wiped the customer's input on every re-render (e.g. a failed save).
+  const initial = useMemo(
+    () => address || newAddressDefaults(currentUser, isFirstAddress),
+    [address, currentUser, isFirstAddress],
+  );
+
   return (
     <FormModal
       entity="address"
       isOpen={isOpen}
-      initial={address || newAddressDefaults(currentUser, isFirstAddress)}
+      initial={initial}
       onSave={onSave}
       onClose={onClose}
       busy={busy}
