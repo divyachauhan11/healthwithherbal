@@ -19,9 +19,15 @@ export function OrderPaymentMethodCard({ paymentMethod, total }) {
         </span>
       </div>
       <p className="payment-instructions">
-        No prepayment required. Please keep ₹{total} in
-        cash or UPI ready when our courier partner arrives at your
-        address.
+        {paymentMethod === "cash_on_delivery" ? (
+          <>
+            No prepayment required. Please keep ₹{total} in
+            cash or UPI ready when our courier partner arrives at your
+            address.
+          </>
+        ) : (
+          "You chose to pay online through PayU, so nothing is due when your order arrives."
+        )}
       </p>
     </OrderInfoCard>
   );
