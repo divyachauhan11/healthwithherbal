@@ -4,6 +4,9 @@ import { Plus } from "lucide-react";
 import { FormModal, SearchField } from "@/components/admin/global";
 import { BrandTable } from "@/components/admin/tables";
 
+/**
+ * Brands page: search, add button, brand table and brand form.
+ */
 export default function BrandsPage({
   rows = [],
   query,

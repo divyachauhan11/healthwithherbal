@@ -1,72 +1,18 @@
 "use client";
 
-import { useEffect, useState, useMemo, useRef } from "react";
 import { SectionHeading } from "../../shared/primitives";
-import { listBrands } from "@/lib/api";
+import { BrandLogoCard } from "./BrandLogoCard";
+import { useSliderBrands } from "./useSliderBrands";
 
+/**
+ * "Brands we trust" infinite marquee of brand logos; renders nothing when
+ * there are no brands (and none are loading).
+ * @param {object} props
+ * @param {(view: string, searchTerm?: string) => void} [props.openCatalog]
+ * @param {Array<string|object>} [props.brands]
+ */
 export function BrandsSliderSection({ openCatalog, brands = [] }) {
-  const [liveBrands, setLiveBrands] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  // If brands prop is empty or not yet loaded from store init, fetch directly from backend API
-  useEffect(() => {
-    if (brands && brands.length > 0) return;
-
-    let active = true;
-    setLoading(true);
-    listBrands()
-      .then((data) => {
-        if (!active) return;
-        if (Array.isArray(data) && data.length > 0) {
-          setLiveBrands(data);
-        }
-      })
-      .catch((err) => {
-        console.warn("Could not fetch brands from backend:", err);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [brands]);
-
-  // Normalize brands strictly from the backend / database
-  const displayedBrands = useMemo(() => {
-    const source = brands && brands.length > 0 ? brands : liveBrands;
-    if (!Array.isArray(source) || source.length === 0) return [];
-
-    return source.map((b) => {
-      const name = typeof b === "string" ? b : b?.name || "";
-      const slug =
-        typeof b === "object" && b?.slug
-          ? b.slug
-          : name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-
-      const rawLogo =
-        typeof b === "object"
-          ? b?.logoUrl || b?.image || (Array.isArray(b?.images) && b.images.length > 0 ? b.images[0] : "")
-          : "";
-
-      const logoUrl = typeof rawLogo === "string" ? rawLogo.trim() : "";
-
-      return {
-        _id: typeof b === "object" ? b?._id : slug,
-        name,
-        slug,
-        logoUrl: logoUrl || "",
-        description: typeof b === "object" ? b?.description || "" : "",
-      };
-    });
-  }, [brands, liveBrands]);
-
-  // Duplicate for seamless infinite marquee loop
-  const duplicated = useMemo(() => {
-    if (displayedBrands.length === 0) return [];
-    return [...displayedBrands, ...displayedBrands];
-  }, [displayedBrands]);
+  const { displayedBrands, duplicated, loading } = useSliderBrands(brands);
 
   if (displayedBrands.length === 0 && !loading) {
     return null;
@@ -87,47 +33,11 @@ export function BrandsSliderSection({ openCatalog, brands = [] }) {
       <div className="brand-marquee-viewport">
         <div className="brand-marquee-track">
           {duplicated.map((brand, idx) => (
-            <button
-              type="button"
+            <BrandLogoCard
               key={`${brand.slug || brand.name}-${idx}`}
-              className="brand-logo-only-card"
-              onClick={() => {
-                if (openCatalog) {
-                  openCatalog("Brands", brand.name);
-                } else if (typeof window !== "undefined") {
-                  window.location.href = `/shop?brand=${encodeURIComponent(brand.name)}`;
-                }
-              }}
-              title={`Explore products from ${brand.name}`}
-            >
-              {brand.logoUrl ? (
-                <img
-                  src={brand.logoUrl}
-                  alt={brand.name}
-                  className="brand-logo-img"
-                  onError={(e) => {
-                    // Gracefully fallback to clean brand title badge if image fails
-                    e.currentTarget.style.display = "none";
-                    const fallbackEl = e.currentTarget.parentElement?.querySelector(
-                      ".brand-fallback-monogram"
-                    );
-                    if (fallbackEl) {
-                      fallbackEl.style.display = "flex";
-                    }
-                  }}
-                />
-              ) : null}
-
-              <div
-                className="brand-fallback-monogram"
-                style={{ display: brand.logoUrl ? "none" : "flex" }}
-              >
-                <span className="brand-monogram-circle">
-                  {brand.name.charAt(0).toUpperCase()}
-                </span>
-                <span className="brand-fallback-name">{brand.name}</span>
-              </div>
-            </button>
+              brand={brand}
+              openCatalog={openCatalog}
+            />
           ))}
         </div>
       </div>

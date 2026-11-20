@@ -2,6 +2,9 @@ import { Plus } from "lucide-react";
 import { SearchField, ProductModal } from "@/components/admin/global";
 import { ProductTable } from "@/components/admin/tables";
 
+/**
+ * Products page: search, add button, optional parent-category scope, product table and form.
+ */
 export default function ProductsPage({
   rows,
   query,

@@ -12,6 +12,10 @@ const compat = new FlatCompat({
 const eslintConfig = [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
+    // Flat config only matches .js/.mjs/.cjs by default; lint the JSX too.
+    files: ["**/*.{js,jsx,mjs,cjs}"],
+  },
+  {
     ignores: [
       ".next/**",
       "out/**",

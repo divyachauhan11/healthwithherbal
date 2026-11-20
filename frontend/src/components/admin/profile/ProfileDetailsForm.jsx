@@ -1,6 +1,16 @@
 import { Mail, Phone, Save, Trash2, UserRound } from "lucide-react";
 import { FormField } from "@/components/shared/FormField";
+import { ProfileFeedback } from "./ProfileFeedback";
 
+/**
+ * "Personal details" card: optional remove-photo action, feedback messages and the
+ * name / email (read-only) / phone form.
+ * @param {{
+ *   profile: object, user?: object, name: string, setName: Function, phone: string, setPhone: Function,
+ *   loading: boolean, saving: boolean, message: string, error: string, onSubmit: Function,
+ *   canRemoveAvatar: boolean, onRemoveAvatar: () => void
+ * }} props
+ */
 export function ProfileDetailsForm({
   profile,
   user,
@@ -34,16 +44,8 @@ export function ProfileDetailsForm({
           </button>
         )}
       </div>
-      {error && (
-        <p className="admin-profile-feedback error" role="alert">
-          {error}
-        </p>
-      )}
-      {message && (
-        <p className="admin-profile-feedback success" role="status">
-          {message}
-        </p>
-      )}
+      <ProfileFeedback tone="error" message={error} />
+      <ProfileFeedback tone="success" message={message} />
       <form onSubmit={onSubmit}>
         <FormField
           className="admin-profile-field"

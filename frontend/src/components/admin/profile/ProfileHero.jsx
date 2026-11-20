@@ -1,5 +1,12 @@
 import { Camera, ShieldCheck } from "lucide-react";
 
+/**
+ * Profile header: avatar (photo or initials) with the upload button, name, email and role.
+ * @param {{
+ *   profile: object, user?: object, roleLabel: string, initials: string, avatarUrl: string,
+ *   fileInputRef: {current: HTMLInputElement|null}, onSelectAvatar: Function, saving: boolean
+ * }} props
+ */
 export function ProfileHero({
   profile,
   user,

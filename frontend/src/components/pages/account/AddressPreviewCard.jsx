@@ -1,5 +1,10 @@
 import { CheckCircle2 } from "lucide-react";
 
+/**
+ * Compact card of the default address on the account overview (nothing without an address).
+ * @param {object} props
+ * @param {object} [props.address] Saved address.
+ */
 export function AddressPreviewCard({ address }) {
   if (!address) return null;
 

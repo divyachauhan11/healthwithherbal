@@ -1,6 +1,6 @@
 const config = require("../config");
 const { escapeHtml } = require("../utils/string");
-const { readJsonResponse } = require("../utils/http");
+const { fetchExternal, readJsonResponse } = require("../utils/http");
 
 /**
  * Brevo (Sendinblue) Transactional Email Service
@@ -62,15 +62,19 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, textConte
       payload.textContent = textContent;
     }
 
-    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
-      method: "POST",
-      headers: {
-        accept: "application/json",
-        "api-key": apiKey,
-        "content-type": "application/json",
+    const response = await fetchExternal(
+      "https://api.brevo.com/v3/smtp/email",
+      {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "api-key": apiKey,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
-      body: JSON.stringify(payload),
-    });
+      { serviceName: "Brevo" },
+    );
 
     const data = await readJsonResponse(response, "Brevo");
 
@@ -82,7 +86,7 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, textConte
       });
 
       const errorMessage =
-        data.message ||
+        data?.message ||
         `Brevo API failed with status ${response.status} (${response.statusText})`;
       const error = new Error(errorMessage);
       error.status = response.status;
@@ -91,9 +95,9 @@ async function sendBrevoEmail({ toEmail, toName, subject, htmlContent, textConte
     }
 
     console.log(
-      `✅ [Brevo Success] Email sent to ${toEmail} (Message ID: ${data.messageId || "ok"})`,
+      `✅ [Brevo Success] Email sent to ${toEmail} (Message ID: ${data?.messageId || "ok"})`,
     );
-    return { success: true, messageId: data.messageId };
+    return { success: true, messageId: data?.messageId };
   } catch (error) {
     console.error("❌ Error sending email via Brevo:", {
       message: error.message,

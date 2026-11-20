@@ -6,6 +6,13 @@ const NAVIGATION_ITEMS = [
   { id: "addresses", title: "My Address", description: "Manage shipping addresses", Icon: MapPin },
 ];
 
+/**
+ * Account tab navigation (overview, orders, addresses) and the logout item.
+ * @param {object} props
+ * @param {string} props.activeTab Id of the selected tab.
+ * @param {(tab: string) => void} props.onTabChange Selects a tab.
+ * @param {() => void} props.onLogout Asks to log out.
+ */
 export function AccountNavigationMenu({ activeTab, onTabChange, onLogout }) {
   return (
     <div className="account-nav-group">

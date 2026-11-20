@@ -1,6 +1,22 @@
 "use client";
-import { ArrowRight, ChevronRight, Heart } from "lucide-react";
-import { AppButton, ProductCard } from "@/components/pages/shared/primitives";
+import { CatalogHeading } from "@/components/pages/shared/CatalogHeading";
+import {
+  WishlistBreadcrumbs,
+  WishlistItems,
+  getWishlistProducts,
+} from "@/components/pages/wishlist";
+
+/**
+ * Wishlist page: breadcrumbs, heading with the item count and the saved products.
+ * @param {object} props
+ * @param {Array<string|number>} props.wished Wishlist product IDs.
+ * @param {Array<string|number>} props.cart
+ * @param {(id: string|number) => void} props.onWish
+ * @param {(id: string|number) => void} props.onAdd
+ * @param {(id: string|number) => void} props.openProduct
+ * @param {(view: string) => void} [props.openCatalog]
+ * @param {Array<object>} [props.products]
+ */
 export function WishlistPage({
   wished,
   cart,
@@ -10,59 +26,26 @@ export function WishlistPage({
   openCatalog,
   products: productsProp = [],
 }) {
-  const activeProducts = productsProp || [];
-  const wishedIds = new Set(wished.map((id) => String(id)));
-  const wishedItems = activeProducts.filter((product) =>
-    wishedIds.has(String(product.id ?? product._id)),
-  );
+  const wishedItems = getWishlistProducts(productsProp || [], wished);
   return (
     <main className="page-width wishlist-page" style={{ padding: "40px 0" }}>
-      <div className="breadcrumbs">
-        Home <ChevronRight size={13} /> Wishlist
-      </div>
-      <div className="shop-heading">
-        <div>
-          <span className="eyebrow">Your Saved Remedies</span>
-          <h1>My Wishlist</h1>
-          <p>Herbal formulations and wellness essentials you've bookmarked.</p>
-        </div>
-        <div className="shop-count">{wishedItems.length} items</div>
-      </div>
+      <WishlistBreadcrumbs />
+      <CatalogHeading
+        eyebrow="Your Saved Remedies"
+        title="My Wishlist"
+        copy="Herbal formulations and wellness essentials you've bookmarked."
+      >
+        {wishedItems.length} items
+      </CatalogHeading>
 
-      {wishedItems.length === 0 ? (
-        <div
-          className="empty-state"
-          style={{ textAlign: "center", padding: "60px 20px" }}
-        >
-          <Heart
-            size={48}
-            strokeWidth={1.5}
-            style={{ margin: "0 auto 16px", opacity: 0.4 }}
-          />
-          <h3>Your wishlist is empty</h3>
-          <p>
-            Explore our Ayurvedic remedies and save your favourites for later.
-          </p>
-          <AppButton onClick={() => openCatalog?.("All Products")}>
-            Explore Remedies <ArrowRight size={16} />
-          </AppButton>
-        </div>
-      ) : (
-        <div className="products-grid">
-          {wishedItems.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              wished={true}
-              added={cart.includes(product.id)}
-              onWish={() => onWish(product.id)}
-              onAdd={() => onAdd(product.id)}
-              onOpen={() => openProduct(product.id)}
-              onSimilar={() => openCatalog?.(product.category || "All Products")}
-            />
-          ))}
-        </div>
-      )}
+      <WishlistItems
+        items={wishedItems}
+        cart={cart}
+        onWish={onWish}
+        onAdd={onAdd}
+        openProduct={openProduct}
+        openCatalog={openCatalog}
+      />
     </main>
   );
 }

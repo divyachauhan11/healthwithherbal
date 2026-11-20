@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { X, Loader2 } from "lucide-react";
+import { useRef } from "react";
+import { ModalFooter, ModalHeader, useModalDismiss } from "./modal";
 
 /**
  * Global Base Modal Component
  * Handles backdrop, card frame, header, scrolling body, footer, escape key, and scroll lock.
+ * With `onSubmit` the card content is a `<form>` and the footer shows a submit button.
  */
 export function Modal({
   isOpen,
@@ -24,83 +25,29 @@ export function Modal({
 }) {
   const modalRef = useRef(null);
 
-  // Lock body scroll and listen for Escape key
-  useEffect(() => {
-    if (!isOpen) return;
-    const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-
-    const handleKeyDown = (e) => {
-      if (e.key === "Escape" && !busy) {
-        onClose?.();
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = originalOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [isOpen, onClose, busy]);
+  useModalDismiss({ isOpen, busy, onClose });
 
   if (!isOpen) return null;
 
   const content = (
     <>
-      {/* Modal Header */}
-      <div className="admin-modal-header">
-        <div>
-          {title && <h2>{title}</h2>}
-          {subtitle && <p>{subtitle}</p>}
-        </div>
-        <button
-          type="button"
-          className="admin-modal-close"
-          onClick={onClose}
-          disabled={busy}
-          aria-label="Close modal"
-        >
-          <X size={16} />
-        </button>
-      </div>
+      <ModalHeader title={title} subtitle={subtitle} busy={busy} onClose={onClose} />
 
-      {/* Modal Body */}
       <div className="admin-modal-body">
         <div className="form-section" style={{ padding: 0 }}>
           {children}
         </div>
       </div>
 
-      {/* Modal Footer */}
       {showFooter && (
-        <div className="admin-modal-footer">
-          {footer ? (
-            footer
-          ) : (
-            <>
-              <button
-                type="button"
-                className="outline"
-                onClick={onClose}
-                disabled={busy}
-              >
-                {cancelLabel}
-              </button>
-              {onSubmit && (
-                <button type="submit" className="primary" disabled={busy}>
-                  {busy ? (
-                    <>
-                      <Loader2 size={15} className="spin-animate" />
-                      Saving…
-                    </>
-                  ) : (
-                    submitLabel
-                  )}
-                </button>
-              )}
-            </>
-          )}
-        </div>
+        <ModalFooter
+          footer={footer}
+          busy={busy}
+          onClose={onClose}
+          cancelLabel={cancelLabel}
+          showSubmit={Boolean(onSubmit)}
+          submitLabel={submitLabel}
+        />
       )}
     </>
   );

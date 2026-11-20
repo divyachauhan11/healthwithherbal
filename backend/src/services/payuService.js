@@ -1,5 +1,5 @@
 const crypto = require("node:crypto");
-const { readJsonResponse } = require("../utils/http");
+const { fetchExternal, readJsonResponse } = require("../utils/http");
 
 function getPayuConfig(config) {
   const production = config.payuEnvironment === "production";
@@ -104,12 +104,15 @@ async function verifyTransaction(txnid, config) {
     var1: txnid,
     hash,
   });
-  const response = await fetch(credentials.verifyUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body,
-    signal: AbortSignal.timeout(10000),
-  });
+  const response = await fetchExternal(
+    credentials.verifyUrl,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body,
+    },
+    { serviceName: "PayU verify_payment", timeoutMs: 10000 },
+  );
   const data = await readJsonResponse(response, "PayU verify_payment");
   if (!response.ok || Number(data?.status) !== 1) {
     throw new Error(`PayU transaction verification failed (HTTP ${response.status}).`);

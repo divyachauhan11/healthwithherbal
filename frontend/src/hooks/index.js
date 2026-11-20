@@ -1,6 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
  * Load and retain an async resource while ignoring results from stale effects.
@@ -80,21 +79,4 @@ export function useAsyncResource({
   }, []);
 
   return { data, loading, error, refetch, setData, setError };
-}
-
-export function useLocalStorage(key, initialValue) {
-  const [value, setValue] = useState(initialValue);
-  useEffect(() => {
-    try {
-      const item = window.localStorage.getItem(key);
-      if (item) setValue(JSON.parse(item));
-    } catch {}
-  }, [key]);
-  const setStoredValue = (val) => {
-    setValue(val);
-    try {
-      window.localStorage.setItem(key, JSON.stringify(val));
-    } catch {}
-  };
-  return [value, setStoredValue];
 }

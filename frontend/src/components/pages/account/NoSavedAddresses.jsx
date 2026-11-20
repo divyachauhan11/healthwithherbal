@@ -1,5 +1,20 @@
 import { MapPin, Plus } from "lucide-react";
 
+/**
+ * Empty-state card of the account page (used for addresses and orders) with an
+ * icon, title, description and an inline or button action.
+ * @param {object} props
+ * @param {() => void} props.onAddAddress Action handler.
+ * @param {string} [props.title] Heading.
+ * @param {string} [props.description] Text under the heading.
+ * @param {string} [props.actionLabel] Action label.
+ * @param {boolean} [props.inlineAction=false] Render the action as an inline link.
+ * @param {Function} [props.Icon] Lucide icon of the illustration.
+ * @param {Function|null} [props.actionIcon] Icon of the action button (null for none).
+ * @param {string} [props.iconWrapperClassName] Illustration class.
+ * @param {string} [props.className] Extra card class.
+ * @param {object} [props.style] Inline card style.
+ */
 export function NoSavedAddresses({
   onAddAddress,
   title = "No Saved Addresses",

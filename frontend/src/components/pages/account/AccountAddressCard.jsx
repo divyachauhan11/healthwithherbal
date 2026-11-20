@@ -1,6 +1,14 @@
 import { CheckCircle2 } from "lucide-react";
 import { AddressCardActions } from "./AddressCardActions";
 
+/**
+ * Saved address card with tag, default badge, recipient, address lines,
+ * phone and edit/delete actions.
+ * @param {object} props
+ * @param {object} props.address Saved address.
+ * @param {(address: object) => void} props.onEdit Opens the edit form.
+ * @param {(address: object) => void} props.onDelete Asks to delete the address.
+ */
 export function AccountAddressCard({ address, onEdit, onDelete }) {
   return (
     <div className={`account-address-card ${address.isDefault ? "is-default" : ""}`}>

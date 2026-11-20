@@ -1,10 +1,14 @@
 "use client";
 
-import { useState } from "react";
 import { Plus } from "lucide-react";
 import { FormModal, SearchField } from "@/components/admin/global";
 import { CategoryTable } from "@/components/admin/tables";
+import { CategoryViewTabs, useCategoryView } from "@/components/admin/categories";
 
+/**
+ * Categories page: search, add button, categories/parent categories switch, the category
+ * table and the category form.
+ */
 export default function CategoriesPage({
   rows = [],
   catalog,
@@ -17,10 +21,14 @@ export default function CategoriesPage({
   busy,
   onNavigate,
 }) {
-  const [categoryView, setCategoryView] = useState("categories");
-  const isParentCategoryView = categoryView === "parents";
-  const categoryCount = rows.filter((item) => !item.isParent).length;
-  const parentCategoryCount = rows.filter((item) => item.isParent).length;
+  const {
+    categoryView,
+    setCategoryView,
+    isParentCategoryView,
+    categoryCount,
+    parentCategoryCount,
+    visibleRows,
+  } = useCategoryView(rows);
   const categoryRows = catalog?.categories || rows;
 
   return (
@@ -40,29 +48,15 @@ export default function CategoriesPage({
         </button>
       </div>
 
-      <div className="category-admin-tabs" role="group" aria-label="Category management view">
-        <button
-          type="button"
-          aria-pressed={!isParentCategoryView}
-          className={!isParentCategoryView ? "active" : ""}
-          onClick={() => setCategoryView("categories")}
-        >
-          <span>Categories</span>
-          <span className="category-tab-count">{categoryCount}</span>
-        </button>
-        <button
-          type="button"
-          aria-pressed={isParentCategoryView}
-          className={isParentCategoryView ? "active" : ""}
-          onClick={() => setCategoryView("parents")}
-        >
-          <span>Parent Categories</span>
-          <span className="category-tab-count">{parentCategoryCount}</span>
-        </button>
-      </div>
+      <CategoryViewTabs
+        isParentCategoryView={isParentCategoryView}
+        categoryCount={categoryCount}
+        parentCategoryCount={parentCategoryCount}
+        onViewChange={setCategoryView}
+      />
 
       <CategoryTable
-        rows={rows.filter((item) => Boolean(item.isParent) === isParentCategoryView)}
+        rows={visibleRows}
         categoryView={categoryView}
         categoryRows={categoryRows}
         onEdit={(item) => setForm({ kind: "categories", item, parentCategory: Boolean(item.isParent) })}

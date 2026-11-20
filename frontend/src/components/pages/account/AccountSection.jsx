@@ -1,3 +1,13 @@
+/**
+ * Overview section with a title and an optional "view all" style action.
+ * @param {object} props
+ * @param {string} props.title Section title.
+ * @param {string} [props.actionLabel] Action label (hidden when empty).
+ * @param {() => void} [props.onAction] Action handler.
+ * @param {string} [props.className] Extra section class.
+ * @param {object} [props.style] Inline section style.
+ * @param {import("react").ReactNode} props.children Section content.
+ */
 export function AccountSection({ title, actionLabel, onAction, className = "", style, children }) {
   return (
     <section className={`account-overview-section ${className}`.trim()} style={style}>

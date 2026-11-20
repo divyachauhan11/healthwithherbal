@@ -51,3 +51,7 @@ export const slugify = (text = "") =>
     .replace(/^-|-$/g, "");
 export const classStatus = (status = "") =>
   status.toLowerCase().replaceAll(" ", "-");
+/** Format a timestamp as a two-digit day, short month and time (e.g. for notifications); "" when empty. */
+export const dateTimeLabelShort = (value) => value
+  ? new Date(value).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })
+  : "";

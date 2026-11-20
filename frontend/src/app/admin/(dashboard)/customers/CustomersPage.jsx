@@ -1,29 +1,15 @@
 "use client";
 
-import { useState } from "react";
 import { SearchField } from "@/components/admin/global";
 import { CustomerTable } from "@/components/admin/tables";
-import { adminRequest } from "@/lib/admin-api";
+import { useCustomerAccounts } from "@/components/admin/customers";
 import CustomerDetailsModal from "./CustomerDetailsModal";
 
+/**
+ * Customers page: searchable customer table with account suspension and a details dialog.
+ */
 export default function CustomersPage({ rows, query, setQuery, token, onRefresh }) {
-  const [selectedCustomer, setSelectedCustomer] = useState(null);
-
-  const updateCustomerStatus = async (customer) => {
-    const isActive = customer.isActive === false;
-    if (!isActive && !window.confirm(`Suspend ${customer.name || customer.email}? They will no longer be able to sign in.`)) return;
-
-    try {
-      await adminRequest(`/customers/${encodeURIComponent(customer.email)}/status`, {
-        token,
-        method: "PATCH",
-        body: { isActive },
-      });
-      onRefresh?.();
-    } catch (error) {
-      window.alert(error.message || "Could not update the customer account.");
-    }
-  };
+  const { selectedCustomer, setSelectedCustomer, updateCustomerStatus } = useCustomerAccounts({ token, onRefresh });
 
   return (
     <section className="panel page-panel">

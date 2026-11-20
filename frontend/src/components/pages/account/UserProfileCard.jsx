@@ -1,5 +1,12 @@
 import { ChevronRight } from "lucide-react";
 
+/**
+ * Customer greeting card with avatar initial, contact and total orders.
+ * @param {object} props
+ * @param {string} [props.name] Customer name.
+ * @param {string} props.displayPhone Contact shown under the greeting.
+ * @param {number} props.orderCount Number of orders.
+ */
 export function UserProfileCard({ name, displayPhone, orderCount }) {
   const initial = (name || "User").trim().charAt(0).toUpperCase();
 

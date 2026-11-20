@@ -3,6 +3,21 @@
 import { useEffect, useRef } from "react";
 import { AlertTriangle, Trash2, LogOut, X, Loader2 } from "lucide-react";
 
+/**
+ * Confirmation dialog: locks page scroll, focuses the confirm button and
+ * closes on Escape or a backdrop click (both disabled while `loading`).
+ * @param {object} props
+ * @param {boolean} props.isOpen
+ * @param {() => void} [props.onClose]
+ * @param {() => void} props.onConfirm
+ * @param {string} [props.title="Are you sure?"]
+ * @param {import("react").ReactNode} [props.message="This action cannot be undone."]
+ * @param {string} [props.confirmLabel="Confirm"]
+ * @param {string} [props.cancelLabel="Cancel"]
+ * @param {"danger"|"warning"|"default"} [props.variant="danger"] Colours and default icon.
+ * @param {import("react").ComponentType<{size?: number}>} [props.icon] Custom icon component.
+ * @param {boolean} [props.loading=false] Shows a spinner and disables every action.
+ */
 export function ConfirmModal({
   isOpen,
   onClose,

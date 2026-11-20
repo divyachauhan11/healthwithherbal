@@ -1,14 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import ForgotPasswordPage from "@/components/admin/auth/forgot-password/ForgotPasswordPage";
-import { apiPost } from "@/lib/api-client";
+import { ForgotPasswordPage } from "@/components/admin/auth/forgot-password/ForgotPasswordPage";
+import { requestAdminPasswordReset } from "@/lib/admin-api";
 
 export default function Page() {
   const router = useRouter();
 
   const requestReset = async (email) => {
-    await apiPost("/admin/auth/forgot-password", { email });
+    await requestAdminPasswordReset(email);
   };
 
   return (

@@ -1,5 +1,9 @@
 import { SearchField } from "@/components/admin/global";
 import { ReviewTable } from "@/components/admin/tables";
+
+/**
+ * Reviews page: searchable product review table with moderation actions.
+ */
 export default function ReviewsPage({
   rows,
   query,

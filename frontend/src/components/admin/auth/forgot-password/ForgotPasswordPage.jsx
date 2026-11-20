@@ -1,7 +1,13 @@
 "use client";
 
-import ForgotPasswordForm from "./ForgotPasswordForm";
+import { ForgotPasswordForm } from "./ForgotPasswordForm";
 
-export default function ForgotPasswordPage(props) {
+/**
+ * Forgot-password page body; forwards every prop to `ForgotPasswordForm`.
+ * @param {object} props See `ForgotPasswordForm`.
+ */
+export function ForgotPasswordPage(props) {
   return <ForgotPasswordForm {...props} />;
 }
+
+export default ForgotPasswordPage;
