@@ -20,7 +20,6 @@ import {
   apiPost,
   apiPut,
   buildApiUrl,
-  UPLOAD_TIMEOUT_MS,
 } from "@/lib/api-client";
 import { getCustomerSessionToken } from "@/lib/session";
 
@@ -178,9 +177,7 @@ export const submitReturnExchangeEmail = (payload) =>
 export async function uploadReturnExchangePhotos(files) {
   const formData = new FormData();
   Array.from(files || []).forEach((file) => formData.append("photos", file));
-  const result = await apiPost("/orders/return-exchange/photos", formData, {
-    timeout: UPLOAD_TIMEOUT_MS,
-  });
+  const result = await apiPost("/orders/return-exchange/photos", formData);
   return result.urls || [];
 }
 

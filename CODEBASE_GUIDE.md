@@ -267,8 +267,10 @@ What `apiRequest` does for every call:
 - **Bodies**: plain objects are sent as JSON; `FormData` and strings as-is.
 - **Auth**: `auth: "customer"` or `auth: "admin"` attaches the stored bearer
   token; an explicit `token` wins (the admin portal passes its in-memory token).
-- **Timeouts**: 30 s by default (`DEFAULT_TIMEOUT_MS`), 120 s for uploads
-  (`UPLOAD_TIMEOUT_MS`); pass `timeout: 0` to disable.
+- **Timeouts**: reads (GET/HEAD) fail with `TIMEOUT` after 30 s
+  (`DEFAULT_TIMEOUT_MS`). Writes and uploads have no client timeout by default,
+  because the server may still complete them and a retry could duplicate the
+  write (for example an order); pass `timeout` to set one explicitly.
 - **Responses**: parses JSON (204/empty → `null`); a body that is not JSON
   raises an error with a preview instead of being silently ignored.
 - **Errors**: every failure is an `ApiError` with `status`, `data`, a safe

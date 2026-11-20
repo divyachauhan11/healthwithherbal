@@ -6,7 +6,7 @@
  * - query-string building (`query` option) and safe path building ({@link apiPath})
  * - JSON / FormData request bodies
  * - bearer-token injection (`auth: "customer" | "admin"` or an explicit `token`)
- * - request timeouts (`timeout`, default {@link DEFAULT_TIMEOUT_MS})
+ * - request timeouts (`timeout`; reads default to {@link DEFAULT_TIMEOUT_MS})
  * - response parsing that reports malformed JSON instead of hiding it
  * - normalising every failure into an {@link ApiError}
  *
@@ -21,11 +21,13 @@ const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || "/api").replace(
   "",
 );
 
-/** Default time (ms) to wait for a response before failing with `TIMEOUT`. */
+/**
+ * Default time (ms) a read (GET/HEAD) may take before failing with `TIMEOUT`.
+ * Writes (POST/PUT/PATCH/DELETE), including uploads, have no client timeout
+ * by default: the server may still complete them, and aborting would invite a
+ * retry that duplicates the write (e.g. a second order).
+ */
 export const DEFAULT_TIMEOUT_MS = 30000;
-
-/** Time (ms) allowed for multipart uploads, which can legitimately be slow. */
-export const UPLOAD_TIMEOUT_MS = 120000;
 
 /** Machine-readable `ApiError#code` values. */
 export const API_ERROR_CODES = Object.freeze({
@@ -210,6 +212,7 @@ function serializeBody(body, headers) {
  * @param {"customer"|"admin"} [options.auth] Attach the stored session token.
  * @param {string} [options.token] Explicit bearer token (takes precedence over `auth`).
  * @param {number} [options.timeout] Milliseconds before failing with `TIMEOUT`; 0 disables.
+ *   Defaults to {@link DEFAULT_TIMEOUT_MS} for GET/HEAD and to no timeout for writes.
  * @returns {Promise<*>} Parsed response body (`null` for empty responses).
  * @throws {ApiError} For HTTP errors, invalid JSON, network failures and timeouts.
  *   A request aborted through the caller's own `signal` rejects with the native AbortError.
@@ -221,10 +224,13 @@ export async function apiRequest(path, options = {}) {
     query,
     auth,
     token,
-    timeout = DEFAULT_TIMEOUT_MS,
+    timeout: requestedTimeout,
     signal,
     ...fetchOptions
   } = options;
+  const method = String(fetchOptions.method || "GET").toUpperCase();
+  const timeout =
+    requestedTimeout ?? (method === "GET" || method === "HEAD" ? DEFAULT_TIMEOUT_MS : 0);
 
   const requestHeaders = new Headers(headers);
   const bearerToken = token || readStoredToken(auth);

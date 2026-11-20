@@ -11,7 +11,7 @@
  *   {@link ADMIN_SESSION_INVALID_EVENT}; the portal listens for it and returns
  *   to the sign-in screen. Every failure still rejects with `ApiError`.
  */
-import { apiPath, apiPost, apiRequest, UPLOAD_TIMEOUT_MS } from "@/lib/api-client";
+import { apiPath, apiPost, apiRequest } from "@/lib/api-client";
 import { clearAdminSession } from "@/lib/session";
 import { ADMIN_PAGE_IDS } from "@/constants/admin-pages";
 
@@ -199,12 +199,7 @@ export async function adminUploadRequest(files, { token } = {}) {
     } else if (files) formData.append("images", files);
   }
 
-  return adminRequest("/upload", {
-    token,
-    method: "POST",
-    body: formData,
-    timeout: UPLOAD_TIMEOUT_MS,
-  });
+  return adminRequest("/upload", { token, method: "POST", body: formData });
 }
 
 /* ------------------------------------------------------------------ */
