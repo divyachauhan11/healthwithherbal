@@ -13,3 +13,4 @@ export { OtpResendRow } from "./OtpResendRow";
 export { OtpStep } from "./OtpStep";
 export { SignupStep } from "./SignupStep";
 export { useAuthFlow } from "./useAuthFlow";
+export { useGoogleSignIn } from "./useGoogleSignIn";
