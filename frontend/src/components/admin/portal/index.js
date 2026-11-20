@@ -29,4 +29,5 @@ export {
   getValidPageName,
   hasPageStats,
   normalizePageKey,
+  singularKind,
 } from "./admin-portal-utils";

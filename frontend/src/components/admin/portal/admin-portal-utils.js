@@ -147,6 +147,15 @@ export function filterAdminRows(data, page, query) {
 }
 
 /**
+ * Singular of an admin collection name for messages, e.g. "products" ->
+ * "product", "categories" -> "category".
+ * @param {string} kind
+ * @returns {string}
+ */
+export const singularKind = (kind) =>
+  kind.endsWith("ies") ? `${kind.slice(0, -3)}y` : kind.slice(0, -1);
+
+/**
  * State of the closed delete dialog (a new object each call).
  * @returns {{isOpen: false, kind: string, item: null, isBlocked: false, blockedCount: number, busy: false}}
  */

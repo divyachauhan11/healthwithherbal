@@ -7,6 +7,7 @@ import {
   setAdminProductActive,
   updateAdminUser,
 } from "../../../lib/admin-api";
+import { singularKind } from "./admin-portal-utils";
 
 /**
  * Owns the open record form (`{kind, item, ...}`) and the write actions of the
@@ -36,7 +37,7 @@ export function useAdminMutations({ token, page, load, setData, notify, setBusy 
       const result = await saveAdminRecord(kind, form.item?._id, body, token);
       setForm(null);
       await load(page);
-      notify(`${kind.slice(0, -1)} saved successfully.`);
+      notify(`${singularKind(kind)} saved successfully.`);
       return result;
     } catch (error) {
       notify(error.message, "error");
