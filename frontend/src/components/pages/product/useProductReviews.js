@@ -17,6 +17,9 @@ export function useProductReviews({ product, reviews }) {
   useEffect(() => {
     if (!product) return;
     let active = true;
+    // Until this product's reviews arrive, show its store-data reviews rather
+    // than the previous product's fetched ones.
+    setFetchedReviews(null);
     const prodId = product._id || product.id;
     listReviews(prodId)
       .then((data) => {
