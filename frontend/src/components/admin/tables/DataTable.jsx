@@ -1,16 +1,13 @@
-import { useState, useMemo } from "react";
-import { ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { Empty } from "../global/Empty";
-import { TablePagination, useTablePagination } from "./TablePagination";
-
-/**
- * Safely resolves nested property keys (e.g. "category.name" or "user.email")
- */
-function getNestedValue(obj, path) {
-  if (!obj || !path) return undefined;
-  if (!path.includes(".")) return obj[path];
-  return path.split(".").reduce((acc, part) => acc?.[part], obj);
-}
+import { TablePagination } from "./TablePagination";
+import {
+  DataTableEmptyRow,
+  DataTableHead,
+  DataTableRow,
+  DataTableSkeletonRows,
+  resolveRowKey,
+  useDataTable,
+} from "./datatable";
 
 /**
  * Global Reusable DataTable Component
@@ -37,6 +34,7 @@ function getNestedValue(obj, path) {
  * @param {boolean} loading - Display loading skeleton state (default: false)
  * @param {number} skeletonRows - Number of skeleton rows when loading (default: 5)
  * @param {ReactNode} emptyMessage - Custom text or node for empty data (default: "No records found.")
+ * @param {ReactNode} emptyState - Optional node rendered instead of the empty message
  * @param {Function} onRowClick - Optional click handler for row: (row, index) => void
  * @param {string|Function} rowClassName - CSS class for <tr> or (row, index) => string
  * @param {string} className - Optional wrapper class
@@ -59,209 +57,37 @@ export function DataTable({
   className = "",
   tableClassName = "",
 }) {
-  // Allow passing either `data` or `rows`
-  const rawData = rows !== undefined ? rows : data;
-  const safeData = Array.isArray(rawData) ? rawData : [];
-
-  // Filter out columns with hide === true
-  const activeColumns = useMemo(() => {
-    return columns.filter((col) => {
-      if (!col) return false;
-      if (typeof col.hide === "function") return !col.hide(safeData);
-      return !col.hide;
-    });
-  }, [columns, safeData]);
-
-  // Client-side Sorting State
-  const [sortConfig, setSortConfig] = useState({
-    key: null,
-    direction: null, // "asc" | "desc" | null
-  });
-
-  const handleSort = (column) => {
-    if (!column.sortable) return;
-    const key = column.key;
-
-    setSortConfig((prev) => {
-      if (prev.key !== key) {
-        return { key, direction: "asc" };
-      }
-      if (prev.direction === "asc") {
-        return { key, direction: "desc" };
-      }
-      return { key: null, direction: null };
-    });
-  };
-
-  // Sorted Data Memo
-  const sortedData = useMemo(() => {
-    if (!sortConfig.key || !sortConfig.direction) {
-      return safeData;
-    }
-
-    const activeCol = activeColumns.find((c) => c.key === sortConfig.key);
-    const customSort = activeCol?.sortFn;
-
-    return [...safeData].sort((a, b) => {
-      if (customSort) {
-        const res = customSort(a, b);
-        return sortConfig.direction === "asc" ? res : -res;
-      }
-
-      const valA = getNestedValue(a, sortConfig.key);
-      const valB = getNestedValue(b, sortConfig.key);
-
-      if (valA === valB) return 0;
-      if (valA === undefined || valA === null) return 1;
-      if (valB === undefined || valB === null) return -1;
-
-      let comparison = 0;
-      if (typeof valA === "number" && typeof valB === "number") {
-        comparison = valA - valB;
-      } else if (typeof valA === "string" && typeof valB === "string") {
-        comparison = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: "base" });
-      } else {
-        comparison = String(valA) > String(valB) ? 1 : -1;
-      }
-
-      return sortConfig.direction === "asc" ? comparison : -comparison;
-    });
-  }, [safeData, sortConfig, activeColumns]);
-
-  // Built-in pagination hook
-  const tablePagination = useTablePagination(
-    sortedData,
-    pagination ? pageSize : Math.max(1, sortedData.length || 1)
-  );
-
-  const displayedRows = pagination
-    ? tablePagination.displayedRows
-    : sortedData;
-
-  const getRowKey = (row, index) => {
-    if (typeof rowKey === "function") return rowKey(row, index);
-    if (typeof rowKey === "string" && row?.[rowKey] !== undefined) return row[rowKey];
-    return row?._id || row?.id || index;
-  };
+  const { safeData, activeColumns, sortConfig, handleSort, tablePagination, displayedRows } =
+    useDataTable({ columns, data, rows, pageSize, pagination });
 
   return (
     <div className={`datatable-container ${className}`}>
       <div className="table-wrap">
         <table className={tableClassName}>
-          <thead>
-            <tr>
-              {activeColumns.map((col, idx) => {
-                const isSortable = !!col.sortable;
-                const isSorted = sortConfig.key === col.key && sortConfig.direction;
-                const alignStyle = col.align ? { textAlign: col.align } : {};
-                const widthStyle = col.width ? { width: col.width } : {};
-
-                return (
-                  <th
-                    key={col.key || `th-${idx}`}
-                    className={col.className || ""}
-                    style={{ ...alignStyle, ...widthStyle, ...col.style }}
-                  >
-                    {isSortable ? (
-                      <button
-                        type="button"
-                        className={`datatable-sort-btn ${isSorted ? "active" : ""}`}
-                        onClick={() => handleSort(col)}
-                        title={`Sort by ${typeof col.label === "string" ? col.label : col.key}`}
-                      >
-                        <span>{col.label}</span>
-                        {isSorted ? (
-                          sortConfig.direction === "asc" ? (
-                            <ArrowUp size={13} className="datatable-sort-icon" />
-                          ) : (
-                            <ArrowDown size={13} className="datatable-sort-icon" />
-                          )
-                        ) : (
-                          <ArrowUpDown size={12} className="datatable-sort-icon" />
-                        )}
-                      </button>
-                    ) : (
-                      col.label
-                    )}
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
+          <DataTableHead columns={activeColumns} sortConfig={sortConfig} onSort={handleSort} />
           <tbody>
             {loading ? (
               // Skeleton Loading Rows
-              Array.from({ length: skeletonRows }).map((_, rIdx) => (
-                <tr key={`skeleton-${rIdx}`}>
-                  {activeColumns.map((col, cIdx) => (
-                    <td key={`skeleton-${rIdx}-${cIdx}`}>
-                      <div
-                        className="datatable-skeleton-cell"
-                        style={{
-                          width: cIdx === 0 ? "70%" : cIdx === 1 ? "45%" : "60%",
-                        }}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))
+              <DataTableSkeletonRows columns={activeColumns} rowCount={skeletonRows} />
             ) : displayedRows.length > 0 ? (
               // Data Rows
-              displayedRows.map((row, rIdx) => {
-                const key = getRowKey(row, rIdx);
-                const isClickable = typeof onRowClick === "function";
-                const rowCustomClass =
-                  typeof rowClassName === "function"
-                    ? rowClassName(row, rIdx)
-                    : rowClassName || "";
-
-                return (
-                  <tr
-                    key={key}
-                    className={`${isClickable ? "datatable-row-clickable" : ""} ${rowCustomClass}`.trim()}
-                    onClick={isClickable ? (e) => onRowClick(row, rIdx, e) : undefined}
-                  >
-                    {activeColumns.map((col, cIdx) => {
-                      const alignStyle = col.align ? { textAlign: col.align } : {};
-                      const cellClass =
-                        typeof col.cellClassName === "function"
-                          ? col.cellClassName(row)
-                          : col.cellClassName || "";
-                      const cellStyle =
-                        typeof col.cellStyle === "function"
-                          ? col.cellStyle(row)
-                          : col.cellStyle || {};
-
-                      const cellContent = col.render
-                        ? col.render(row, rIdx, {
-                            page: tablePagination.page,
-                            pageSize: tablePagination.pageSize,
-                            indexInPage: rIdx,
-                            globalIndex:
-                              (tablePagination.page - 1) * tablePagination.pageSize + rIdx,
-                          })
-                        : getNestedValue(row, col.key) ?? "—";
-
-                      return (
-                        <td
-                          key={col.key || `td-${cIdx}`}
-                          className={cellClass}
-                          style={{ ...alignStyle, ...cellStyle }}
-                        >
-                          {cellContent}
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })
+              displayedRows.map((row, rIdx) => (
+                <DataTableRow
+                  key={resolveRowKey(rowKey, row, rIdx)}
+                  row={row}
+                  rowIndex={rIdx}
+                  columns={activeColumns}
+                  page={tablePagination.page}
+                  pageSize={tablePagination.pageSize}
+                  onRowClick={onRowClick}
+                  rowClassName={rowClassName}
+                />
+              ))
             ) : (
               // Empty State
-              <tr>
-                <td colSpan={Math.max(1, activeColumns.length)}>
-                  {emptyState ?? <Empty>{emptyMessage}</Empty>}
-                </td>
-              </tr>
+              <DataTableEmptyRow colSpan={Math.max(1, activeColumns.length)}>
+                {emptyState ?? <Empty>{emptyMessage}</Empty>}
+              </DataTableEmptyRow>
             )}
           </tbody>
         </table>
