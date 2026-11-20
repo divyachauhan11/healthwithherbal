@@ -1,22 +1,33 @@
 # Account components
 
-Import the account UI from this folder's public entry point:
+Import the account UI from this folder's public entry point
+(`index.js` lists every export):
 
 ```jsx
 import {
-  AccountAddressCard,
-  AccountLoadingState,
-  AccountNavigationMenu,
-  AccountPageHeader,
-  AccountSection,
   AccountSidebar,
-  AddressCardActions,
-  AddressPreviewCard,
-  NoSavedAddresses,
+  AccountOverviewTab,
+  AccountOrdersTab,
+  AccountAddressesTab,
   OrderCard,
-  UserProfileCard,
+  ReturnRequestModal,
+  useAccountData,
+  useAddressBook,
+  useReturnRequest,
 } from "@/components/pages/account";
 ```
+
+- Tabs and sections: `AccountOverviewTab` (`AccountOrdersOverview`,
+  `AccountAddressesOverview`), `AccountOrdersTab`, `AccountAddressesTab`.
+- Orders: `AccountOrderList` renders `OrderCard`s, which are composed of
+  `OrderCardHeader`, `OrderDeliveredNotice`, `OrderCardItem`,
+  `OrderCardSummary` and `OrderCardFooter`.
+- Dialogs: `AddressFormModal` (the shared `FormModal`), `ReturnRequestModal`,
+  `AccountLogoutConfirm`, `DeleteAddressConfirm`.
+- Hooks: `useAccountData` (orders, addresses, live status updates),
+  `useAddressBook` (address form, save, delete) and `useReturnRequest`
+  (return/exchange dialog state and submission). Pure helpers live in
+  `account-utils.js`.
 
 These components use the account CSS class names defined in
 `src/app/globals.css`. Include the corresponding account styles in the host

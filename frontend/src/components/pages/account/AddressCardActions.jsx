@@ -1,5 +1,11 @@
 import { Pencil, Trash2 } from "lucide-react";
 
+/**
+ * Edit / delete buttons of a saved address card.
+ * @param {object} props
+ * @param {() => void} props.onEdit
+ * @param {() => void} props.onDelete
+ */
 export function AddressCardActions({ onEdit, onDelete }) {
   return (
     <div className="address-card-actions">
