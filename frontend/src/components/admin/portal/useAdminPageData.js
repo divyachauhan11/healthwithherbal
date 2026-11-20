@@ -72,8 +72,9 @@ export function useAdminPageData({
             }));
           })
           .catch((error) => {
-            // The dashboard is prefetched for header stats; the page itself still works.
-            console.warn("Could not prefetch dashboard stats:", error.message);
+            // The dashboard is prefetched for header stats; the page itself still
+            // works. Staff without Dashboard access get a 403 here by design.
+            if (error?.status !== 403) console.warn("Could not prefetch dashboard stats:", error.message);
           });
       }
     } catch (error) {
