@@ -8,6 +8,7 @@ import {
 import {
   digitsOnly,
   emptyOtp,
+  normalizeMobileNumber,
   focusOtpBox,
   otpFromPaste,
   validateLoginIdentifier,
@@ -188,6 +189,15 @@ export function useAuthFlow({ isOpen, onClose, onSuccess }) {
       if (onSuccess) {
         onSuccess(authenticatedUser);
       }
+      // The dialog stays mounted: start the next sign-in (e.g. after logging
+      // out) at the first step instead of this used code.
+      setView("login");
+      setAuthMode("login");
+      setOtp(emptyOtp());
+      setDevOtp("");
+      setInfoMsg("");
+      setMaskedTarget("");
+      setResendCooldown(0);
       onClose();
     } catch (err) {
       setError(
@@ -252,7 +262,7 @@ export function useAuthFlow({ isOpen, onClose, onSuccess }) {
   };
 
   const changeMobileNumber = (value) => {
-    setMobileNumber(digitsOnly(value).slice(0, 10));
+    setMobileNumber(normalizeMobileNumber(value));
     setError("");
   };
 
