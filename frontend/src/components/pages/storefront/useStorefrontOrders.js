@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { saveLastOrder } from "@/lib/session";
 
 /**
@@ -19,6 +19,24 @@ import { saveLastOrder } from "@/lib/session";
 export function useStorefrontOrders({ updateCart, navigate, notify }) {
   const [placedOrder, setPlacedOrder] = useState(null);
   const [selectedOrder, setSelectedOrder] = useState(null);
+
+  // Back/forward to another order's URL must not keep showing the order that
+  // was opened last: drop the selection so the order page loads the order
+  // named in the URL.
+  useEffect(() => {
+    const forgetMismatchedOrder = () => {
+      const [section, sub, identifier] = window.location.pathname.split("/").filter(Boolean);
+      if (section !== "account" || sub !== "orders" || !identifier) return;
+      const urlOrderId = decodeURIComponent(identifier);
+      setSelectedOrder((current) =>
+        current && urlOrderId !== String(current.orderNumber) && urlOrderId !== String(current._id)
+          ? null
+          : current,
+      );
+    };
+    window.addEventListener("popstate", forgetMismatchedOrder);
+    return () => window.removeEventListener("popstate", forgetMismatchedOrder);
+  }, []);
 
   const completeOrder = (order) => {
     updateCart([]);
